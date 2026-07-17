@@ -35,6 +35,13 @@ src/trxmp/
 
 Dependency direction: `ui → application → domain ← dsp`, with
 `infrastructure` implementing interfaces the application layer declares.
+`tests/test_architecture.py` parses every module's imports and fails the
+build if an arrow points the wrong way.
+
+The UI follows MVVM: `ui/view_models.py` holds session state and emits Qt
+signals; the curve and the sliders each bind to it and never to each
+other. `app.py` is the composition root — the only place that knows the
+preset library means SQLite and preferences mean a JSON file.
 
 ## Development
 
@@ -70,7 +77,7 @@ uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
 - [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run trxmp-dsp process in.wav out.wav --preset smoke-test`)
 - [x] **M2 — Domain & persistence**: `StoredPreset` entity, `PresetRepository` Protocol + SQLite/SQLAlchemy adapter, Pydantic-at-the-boundary JSON/YAML/CSV import-export, `trxmp-dsp preset` subcommands
-- [ ] **M3 — UI shell**: theme engine (dark/light/accent), interactive EQ curve, band controls
+- [x] **M3 — UI shell**: token-based theme engine (dark/light × 6 accents, persisted), interactive EQ curve (drag = gain + frequency, wheel = Q, double-click = flatten), band controls, preset picker, live gain-staging readout
 - [ ] **M4 — Equalizer APO backend**: detect install, write configs, live system-wide EQ
 - [ ] **M5 — Devices & profiles**: WASAPI device detection, auto profile switching
 - [ ] **M6 — Preset ecosystem**: AutoEQ / EQ APO / Peace import, headphone catalog

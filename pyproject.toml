@@ -1,6 +1,6 @@
 [project]
 name = "trxmp"
-version = "0.3.0"
+version = "0.4.0"
 description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,6 +19,7 @@ dependencies = [
 dev = [
     "mypy>=1.14",
     "pytest>=8.3",
+    "pytest-qt>=4.4",
     "ruff>=0.9",
     "types-pyyaml>=6.0",
 ]
@@ -58,6 +59,14 @@ select = [
     "RUF",    # ruff's own correctness rules
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Qt's event handlers are camelCase by contract: `paintEvent`,
+# `mousePressEvent` etc. only work because Qt looks them up by that exact
+# name. PEP 8 loses to the framework here — renaming them would silently
+# break the widget. The exception is scoped to the widgets that override
+# them rather than switched off globally.
+"src/trxmp/ui/widgets/*.py" = ["N802"]
+
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
@@ -68,6 +77,11 @@ files = ["src", "tests"]
 [[tool.mypy.overrides]]
 module = ["scipy.*"]
 ignore_missing_imports = true
+
+# pytest-qt's input-simulation helpers (qtbot.mousePress and friends) are
+# unannotated. Rather than relax strictness for the whole test suite, the
+# untyped calls are concentrated in one small helper in tests/test_widgets.py
+# -- the same "contain it at the boundary" move we make for scipy.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

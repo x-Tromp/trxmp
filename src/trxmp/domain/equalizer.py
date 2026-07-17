@@ -154,3 +154,33 @@ class EqPreset:
         peak = self.peak_response_db(sample_rate)
         required = -(peak + HEADROOM_SAFETY_MARGIN_DB) if peak > 0.0 else -HEADROOM_SAFETY_MARGIN_DB
         return min(self.requested_preamp_db, required)
+
+
+# The classic ten-band graphic layout: one band per ISO octave centre,
+# with shelves at the extremes so the lowest/highest controls tilt
+# everything beyond them — a bell at 32 Hz would leave 20-25 Hz almost
+# untouched, which is not what someone dragging the lowest control
+# expects. It's a starting point, not a constraint: bands can be moved
+# anywhere afterwards, and imported presets may have any layout at all.
+GRAPHIC_EQ_LAYOUT: tuple[tuple[FilterType, float, float], ...] = (
+    (FilterType.LOW_SHELF, 32.0, 0.7),
+    (FilterType.PEAKING, 64.0, 1.0),
+    (FilterType.PEAKING, 125.0, 1.0),
+    (FilterType.PEAKING, 250.0, 1.2),
+    (FilterType.PEAKING, 500.0, 1.2),
+    (FilterType.PEAKING, 1_000.0, 1.2),
+    (FilterType.PEAKING, 2_000.0, 1.2),
+    (FilterType.PEAKING, 4_000.0, 1.0),
+    (FilterType.PEAKING, 8_000.0, 1.0),
+    (FilterType.HIGH_SHELF, 16_000.0, 0.7),
+)
+
+
+def default_graphic_preset() -> EqPreset:
+    """A flat ten-band graphic EQ — the app's starting point."""
+    return EqPreset(
+        bands=tuple(
+            EqBand(filter_type, frequency_hz, 0.0, q)
+            for filter_type, frequency_hz, q in GRAPHIC_EQ_LAYOUT
+        )
+    )
