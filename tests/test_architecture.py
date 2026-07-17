@@ -13,12 +13,18 @@ from pathlib import Path
 SRC = Path(__file__).parent.parent / "src" / "trxmp"
 
 # layer package -> import prefixes it must never touch.
+# OS and vendor SDKs that only infrastructure may touch. If `winreg` or
+# `pycaw` ever appear in the domain, the app has stopped being portable
+# and testable in the same breath.
+_PLATFORM = ("winreg", "pycaw", "comtypes")
+
 FORBIDDEN: dict[str, tuple[str, ...]] = {
     "trxmp.domain": (
         "PySide6",
         "scipy",
         "sqlalchemy",
         "pydantic",  # Pydantic lives at the file boundary, never in the domain
+        *_PLATFORM,
         "trxmp.application",
         "trxmp.infrastructure",
         "trxmp.ui",
@@ -27,17 +33,22 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
         "PySide6",
         "sqlalchemy",
         "pydantic",
+        *_PLATFORM,
         "trxmp.domain",
         "trxmp.application",
         "trxmp.infrastructure",
         "trxmp.ui",
     ),
-    # The application layer stays persistence- and serialization-agnostic:
-    # it declares Protocols (e.g. PresetRepository) that infrastructure
-    # implements, so it must not import sqlalchemy, pydantic, or the UI.
-    "trxmp.application": ("PySide6", "sqlalchemy", "pydantic", "trxmp.ui"),
+    # The application layer stays persistence-, serialization- and
+    # OS-agnostic: it declares Protocols (PresetRepository,
+    # AudioDeviceService) that infrastructure implements, so it must not
+    # import sqlalchemy, pydantic, the Windows APIs, or the UI.
+    "trxmp.application": ("PySide6", "sqlalchemy", "pydantic", *_PLATFORM, "trxmp.ui"),
     "trxmp.infrastructure": ("PySide6", "trxmp.ui"),
-    "trxmp.ui": ("scipy", "trxmp.infrastructure"),
+    # The UI may not reach the OS directly either — that's what the
+    # injected services are for, and it's what keeps MainWindow testable
+    # with fakes on a machine with no audio hardware at all.
+    "trxmp.ui": ("scipy", *_PLATFORM, "trxmp.infrastructure"),
 }
 
 

@@ -5,37 +5,12 @@ from __future__ import annotations
 import pytest
 from pytestqt.qtbot import QtBot
 
-from trxmp.application.audio_backend import BackendError, BackendState, BackendStatus
+from tests.fakes import FakeBackend
+from trxmp.application.audio_backend import BackendState
 from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.dsp.biquad import FilterType
 from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.view_models import EqViewModel
-
-
-class FakeBackend:
-    def __init__(self, state: BackendState = BackendState.READY) -> None:
-        self.applied: list[EqPreset] = []
-        self.disable_count = 0
-        self.state = state
-        self.fail_with: str | None = None
-
-    @property
-    def name(self) -> str:
-        return "Fake"
-
-    @property
-    def status(self) -> BackendStatus:
-        return BackendStatus(self.state, "fake backend")
-
-    def apply(self, preset: EqPreset) -> None:
-        if self.fail_with:
-            raise BackendError(self.fail_with)
-        self.applied.append(preset)
-        self.state = BackendState.ACTIVE
-
-    def disable(self) -> None:
-        self.disable_count += 1
-        self.state = BackendState.READY
 
 
 @pytest.fixture

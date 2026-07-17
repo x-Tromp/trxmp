@@ -9,78 +9,31 @@ infrastructure" is worth enforcing.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from pytestqt.qtbot import QtBot
 
-from trxmp.application.audio_backend import BackendState, BackendStatus
+from tests.fakes import (
+    ARCTIS,
+    SPEAKERS,
+    FakeBackend,
+    FakeDeviceService,
+    FakePreferencesStore,
+    InMemoryDeviceProfileRepository,
+    InMemoryPresetRepository,
+)
+from trxmp.application.devices import ProfileManager
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.equalizer import EqBand, EqPreset
-from trxmp.domain.library import StoredPreset
 from trxmp.dsp.biquad import FilterType
 from trxmp.ui.main_window import MainWindow
 
-
-class FakeRepository:
-    def __init__(self) -> None:
-        self.items: dict[str, StoredPreset] = {}
-
-    def get(self, name: str) -> StoredPreset | None:
-        return self.items.get(name)
-
-    def list_all(self) -> list[StoredPreset]:
-        return [self.items[name] for name in sorted(self.items)]
-
-    def upsert(self, name: str, description: str, preset: EqPreset) -> StoredPreset:
-        now = datetime.now(UTC)
-        stored = StoredPreset(name, description, preset, created_at=now, updated_at=now)
-        self.items[name] = stored
-        return stored
-
-    def delete(self, name: str) -> bool:
-        return self.items.pop(name, None) is not None
-
-
-class FakePreferencesStore:
-    def __init__(self, preferences: Preferences | None = None) -> None:
-        self.preferences = preferences or Preferences()
-        self.save_count = 0
-
-    def load(self) -> Preferences:
-        return self.preferences
-
-    def save(self, preferences: Preferences) -> None:
-        self.preferences = preferences
-        self.save_count += 1
-
-
-class FakeBackend:
-    """An audio backend that records instead of touching the system."""
-
-    def __init__(self, state: BackendState = BackendState.READY) -> None:
-        self.applied: list[EqPreset] = []
-        self.state = state
-
-    @property
-    def name(self) -> str:
-        return "Fake"
-
-    @property
-    def status(self) -> BackendStatus:
-        return BackendStatus(self.state, "fake backend detail")
-
-    def apply(self, preset: EqPreset) -> None:
-        self.applied.append(preset)
-
-    def disable(self) -> None:
-        pass
+FakeRepository = InMemoryPresetRepository
 
 
 @pytest.fixture
-def repository() -> FakeRepository:
-    return FakeRepository()
+def repository() -> InMemoryPresetRepository:
+    return InMemoryPresetRepository()
 
 
 @pytest.fixture
@@ -90,11 +43,22 @@ def store() -> FakePreferencesStore:
 
 def _window(
     qtbot: QtBot,
-    repository: FakeRepository,
+    repository: InMemoryPresetRepository,
     store: FakePreferencesStore,
     backend: FakeBackend | None = None,
+    device_service: FakeDeviceService | None = None,
+    profile_manager: ProfileManager | None = None,
+    apo_support_check: object = None,
 ) -> MainWindow:
-    window = MainWindow(PresetLibrary(repository), store, backend or FakeBackend())
+    library = PresetLibrary(repository)
+    window = MainWindow(
+        library,
+        store,
+        backend or FakeBackend(),
+        device_service or FakeDeviceService(),
+        profile_manager or ProfileManager(InMemoryDeviceProfileRepository(), library),
+        apo_support_check,  # type: ignore[arg-type]
+    )
     qtbot.addWidget(window)
     return window
 
@@ -249,3 +213,101 @@ def test_status_line_survives_a_theme_change(
     window = _window(qtbot, repository, store)
     window._theme_button.click()
     assert "fake backend detail" in window._status_label.text()
+
+
+class TestDeviceProfiles:
+    def test_current_output_device_is_shown(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(qtbot, repository, store)
+        assert "Arctis Nova 5" in window._device_label.text()
+
+    def test_switching_to_a_bound_device_loads_its_preset(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """The headline of M5: plug in the headphones, get their curve."""
+        library = PresetLibrary(repository)
+        library.save("Gaming", EqPreset(bands=(EqBand(FilterType.LOW_SHELF, 60.0, 5.0, 0.7),)))
+        manager = ProfileManager(InMemoryDeviceProfileRepository(), library)
+        manager.bind(SPEAKERS, "Gaming")
+
+        service = FakeDeviceService(default=ARCTIS)
+        window = _window(qtbot, repository, store, device_service=service, profile_manager=manager)
+        assert len(window._model.bands) == 10  # the default layout
+
+        service.default = SPEAKERS
+        window._device_controller.refresh()
+
+        assert len(window._model.bands) == 1
+        assert window._model.bands[0].gain_db == 5.0
+        assert "Gaming" in window._device_label.text()
+
+    def test_switching_to_an_unbound_device_leaves_the_eq_alone(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """Automatic behaviour must be earned by an explicit decision.
+        Someone who never made a profile keeps their curve."""
+        service = FakeDeviceService(default=ARCTIS)
+        window = _window(qtbot, repository, store, device_service=service)
+        window._model.set_band_gain(0, 7.0)
+
+        service.default = SPEAKERS
+        window._device_controller.refresh()
+
+        assert window._model.bands[0].gain_db == 7.0
+
+    def test_linking_requires_a_saved_preset(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """A profile stores a preset *name*; a live unsaved curve has
+        none, so the button must explain rather than silently do nothing."""
+        window = _window(qtbot, repository, store)
+        assert window._preset_box.currentData() is None  # "Custom"
+        assert window._link_button.isEnabled()
+
+    def test_link_button_binds_and_unbinds_the_selected_preset(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        repository.upsert("Gaming", "", EqPreset.flat())
+        library = PresetLibrary(repository)
+        manager = ProfileManager(InMemoryDeviceProfileRepository(), library)
+        window = _window(qtbot, repository, store, profile_manager=manager)
+
+        index = window._preset_box.findData("Gaming")
+        window._preset_box.setCurrentIndex(index)
+        window._on_preset_selected(index)
+        window._link_button.click()
+
+        profile = manager.profile_for(ARCTIS)
+        assert profile is not None
+        assert profile.preset_name == "Gaming"
+        assert window._link_button.text() == "Unlink"
+
+        window._link_button.click()
+        assert manager.profile_for(ARCTIS) is None
+
+    def test_warns_when_apo_is_missing_on_this_device(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """The silent failure this exists to prevent: EQ on, curve set,
+        nothing happens, because APO was never hooked to this endpoint."""
+        window = _window(qtbot, repository, store, apo_support_check=lambda _: False)
+        assert "not installed on this device" in window._device_label.text()
+
+    def test_no_warning_when_support_is_unknown(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """ "Couldn't read the registry" is not the same claim as "APO is
+        missing", and must not be dressed up as one."""
+        window = _window(qtbot, repository, store, apo_support_check=lambda _: None)
+        assert "not installed on this device" not in window._device_label.text()
+
+    def test_losing_all_output_is_handled(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        service = FakeDeviceService(default=ARCTIS)
+        window = _window(qtbot, repository, store, device_service=service)
+        service.default = None
+        window._device_controller.refresh()
+        assert "No audio output" in window._device_label.text()
+        assert not window._link_button.isEnabled()

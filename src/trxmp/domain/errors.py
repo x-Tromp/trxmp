@@ -25,3 +25,11 @@ class PresetNotFoundError(EqualizerError):
 
 class DuplicatePresetError(EqualizerError):
     """A preset with this name already exists and overwrite wasn't requested."""
+
+
+class InvalidDeviceError(EqualizerError):
+    """An audio device or device profile is malformed."""
+
+
+class DeviceNotFoundError(EqualizerError):
+    """No audio device matched what was asked for."""

@@ -50,6 +50,27 @@ class PresetRow(Base):
     )
 
 
+class DeviceProfileRow(Base):
+    """Which preset a device should use.
+
+    Deliberately *not* a foreign key to ``presets``: a profile must
+    survive its preset being deleted. The alternative (ON DELETE CASCADE)
+    would silently erase the user's device bindings the moment they tidy
+    up their preset list — losing a decision they never asked to undo.
+    The stale binding is resolved by name at read time instead, and a
+    dangling one simply means "don't switch automatically".
+    """
+
+    __tablename__ = "device_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    device_name: Mapped[str] = mapped_column(String(200))
+    preset_name: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
+
+
 class BandRow(Base):
     __tablename__ = "preset_bands"
 

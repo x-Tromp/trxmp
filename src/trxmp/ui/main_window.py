@@ -9,6 +9,8 @@ testable with fakes, and it's why the architecture test can forbid
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
@@ -24,17 +26,24 @@ from PySide6.QtWidgets import (
 )
 
 from trxmp.application.audio_backend import AudioBackend, BackendState, BackendStatus
+from trxmp.application.devices import AudioDeviceService, ProfileManager
 from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
 from trxmp.application.preferences import AccentColor, Preferences, PreferencesStore, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
+from trxmp.domain.devices import AudioDevice
 from trxmp.domain.errors import EqualizerError
 from trxmp.ui.backend_controller import BackendController
+from trxmp.ui.device_controller import DeviceController
 from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, Theme
 from trxmp.ui.view_models import EqViewModel
 from trxmp.ui.widgets.band_controls import BandControls
 from trxmp.ui.widgets.eq_curve import EqCurveWidget
 
 _ACCENT_SWATCH_SIZE = 14
+
+# Answers "will the EQ actually reach this device?"; injected because it
+# reads the Windows registry, which the UI layer must not know about.
+ApoSupportCheck = Callable[[str], bool | None]
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +52,9 @@ class MainWindow(QMainWindow):
         library: PresetLibrary,
         preferences_store: PreferencesStore,
         backend: AudioBackend,
+        device_service: AudioDeviceService,
+        profile_manager: ProfileManager,
+        apo_support_check: ApoSupportCheck | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -51,6 +63,8 @@ class MainWindow(QMainWindow):
         self._preferences = preferences_store.load()
         self._theme = Theme(self._preferences.theme_mode, self._preferences.accent)
         self._model = EqViewModel()
+        self._profile_manager = profile_manager
+        self._apo_support_check = apo_support_check or (lambda _: None)
         self._accent_buttons: dict[AccentColor, QPushButton] = {}
         # Kept so a theme change can re-render the status line in the new
         # palette without asking the backend again (which touches disk).
@@ -78,6 +92,11 @@ class MainWindow(QMainWindow):
         self._show_backend_status(self._backend_controller.status)
         self._backend_controller.start()
 
+        self._device_controller = DeviceController(device_service, parent=self)
+        self._device_controller.device_changed.connect(self._on_device_changed)
+        self._device_controller.start()
+        self._show_device(self._device_controller.current_device)
+
     # ── Construction ──────────────────────────────────────────────────
     def _build_ui(self) -> None:
         central = QWidget(self)
@@ -99,9 +118,15 @@ class MainWindow(QMainWindow):
         header.addWidget(brand)
         header.addSpacing(SPACE_MD)
 
+        status_column = QVBoxLayout()
+        status_column.setSpacing(2)
         self._status_label = QLabel(self)
         self._status_label.setObjectName("caption")
-        header.addWidget(self._status_label)
+        self._device_label = QLabel(self)
+        self._device_label.setObjectName("caption")
+        status_column.addWidget(self._status_label)
+        status_column.addWidget(self._device_label)
+        header.addLayout(status_column)
         header.addSpacing(SPACE_MD)
 
         self._preset_box = QComboBox(self)
@@ -117,6 +142,10 @@ class MainWindow(QMainWindow):
         reset_button.setObjectName("ghost")
         reset_button.clicked.connect(self._model.reset)
         header.addWidget(reset_button)
+
+        self._link_button = QPushButton("Link to device", self)
+        self._link_button.clicked.connect(self._on_link_clicked)
+        header.addWidget(self._link_button)
 
         header.addStretch(1)
 
@@ -273,6 +302,71 @@ class MainWindow(QMainWindow):
         }[status.state]
         self._status_label.setText(f'<span style="color:{dot}">●</span> {status.detail}')
         self._status_label.setToolTip(status.detail)
+
+    # ── Devices & profiles ────────────────────────────────────────────
+    def _on_device_changed(self, device: AudioDevice | None) -> None:
+        """The user switched headphones — follow them.
+
+        Only a *bound* device changes the EQ. Someone who has never made
+        a profile plugs in a monitor and their curve stays exactly where
+        they left it; someone who bound their Sundara gets their Harman
+        curve back without touching anything. Automatic behaviour has to
+        be earned by an explicit decision, or it's just surprise.
+        """
+        self._show_device(device)
+        if device is None:
+            return
+        preset = self._profile_manager.preset_for(device)
+        if preset is not None:
+            self._model.load(preset)  # -> BackendController applies it
+
+    def _show_device(self, device: AudioDevice | None) -> None:
+        self._link_button.setEnabled(device is not None)
+        if device is None:
+            self._device_label.setText("No audio output")
+            self._link_button.setText("Link to device")
+            return
+
+        profile = self._profile_manager.profile_for(device)
+        text = f"Output: {device.name}"
+        if profile is not None:
+            text += f"  ·  auto: {profile.preset_name}"
+
+        # The warning that saves a support ticket: APO is installed per
+        # device, so the EQ can be "on" and still do nothing here.
+        if self._apo_support_check(device.id) is False:
+            text += "  ·  ⚠ Equalizer APO is not installed on this device"
+
+        self._device_label.setText(text)
+        self._device_label.setToolTip(text)
+        self._link_button.setText("Unlink" if profile else "Link to device")
+
+    def _on_link_clicked(self) -> None:
+        device = self._device_controller.current_device
+        if device is None:
+            return
+        if self._profile_manager.profile_for(device) is not None:
+            self._profile_manager.unbind(device)
+            self._show_device(device)
+            return
+
+        preset_name = self._preset_box.currentData()
+        if preset_name is None:
+            # Nothing to bind: a profile stores a preset *name*, and the
+            # live curve doesn't have one until it's saved.
+            QMessageBox.information(
+                self,
+                "Save the preset first",
+                "Device profiles remember a preset by name. Save this curve with "
+                "“Save as…”, then link it to this device.",
+            )
+            return
+        try:
+            self._profile_manager.bind(device, preset_name)
+        except EqualizerError as error:
+            QMessageBox.warning(self, "Could not link the preset", str(error))
+            return
+        self._show_device(device)
 
     # ── Power & metrics ───────────────────────────────────────────────
     def _on_power_toggled(self, checked: bool) -> None:

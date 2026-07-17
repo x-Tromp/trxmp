@@ -17,6 +17,9 @@ Usage:
     trxmp-dsp apo apply --preset "Sundara v2"
     trxmp-dsp apo disable
     trxmp-dsp apo restore
+    trxmp-dsp devices list
+    trxmp-dsp devices link --device Sundara --preset "Sundara v2"
+    trxmp-dsp devices unlink --device Sundara
 """
 
 from __future__ import annotations
@@ -32,15 +35,20 @@ from pydantic import ValidationError
 
 from trxmp.application.audio_backend import BackendError
 from trxmp.application.audio_files import equalize_wav_file
+from trxmp.application.devices import ProfileManager
 from trxmp.application.preset_library import PresetLibrary
+from trxmp.domain.devices import AudioDevice
 from trxmp.domain.equalizer import EqBand, EqPreset
-from trxmp.domain.errors import EqualizerError
+from trxmp.domain.errors import DeviceNotFoundError, EqualizerError
 from trxmp.dsp.biquad import FilterType
 from trxmp.infrastructure.database import create_default_engine
+from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRepository
 from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
+from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
 from trxmp.infrastructure.preset_files import PresetDocument, load_preset_file, save_preset_file
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
+from trxmp.infrastructure.windows_audio import PycawDeviceService
 
 _DISPLAY_SAMPLE_RATE = 48_000.0
 
@@ -204,6 +212,67 @@ def _cmd_apo_restore(args: argparse.Namespace) -> int:
     return 0
 
 
+def _profile_manager() -> ProfileManager:
+    engine = create_default_engine()
+    return ProfileManager(SqliteDeviceProfileRepository(engine), _library())
+
+
+def _find_device(name_fragment: str) -> AudioDevice:
+    """Resolve a device by a piece of its name.
+
+    Endpoint IDs are GUIDs — nobody is typing those. Matching a fragment
+    of the friendly name is what makes this CLI usable, and refusing an
+    ambiguous match is what keeps it honest.
+    """
+    devices = [
+        device
+        for device in PycawDeviceService().list_output_devices()
+        if device.is_known and name_fragment.lower() in device.name.lower()
+    ]
+    if not devices:
+        raise DeviceNotFoundError(f"no audio output matches {name_fragment!r}")
+    if len(devices) > 1:
+        names = ", ".join(repr(device.name) for device in devices)
+        raise DeviceNotFoundError(f"{name_fragment!r} matches several devices: {names}")
+    return devices[0]
+
+
+def _cmd_devices_list(args: argparse.Namespace) -> int:
+    manager = _profile_manager()
+    devices = [d for d in PycawDeviceService().list_output_devices() if d.is_known]
+    if not devices:
+        print("no audio outputs found")
+        return 0
+    for device in devices:
+        marker = "*" if device.is_default else " "
+        profile = manager.profile_for(device)
+        line = f"{marker} {device.name:<48} [{device.state.value}]"
+        if profile is not None:
+            line += f"  -> {profile.preset_name}"
+        if is_apo_enabled_for_device(device.id) is False:
+            line += "  (no Equalizer APO)"
+        print(line)
+    print("\n* = current default output")
+    return 0
+
+
+def _cmd_devices_link(args: argparse.Namespace) -> int:
+    device = _find_device(args.device)
+    profile = _profile_manager().bind(device, args.preset)
+    print(f"linked {profile.preset_name!r} to {device.name!r}")
+    print("it will be applied automatically whenever this device becomes the default")
+    return 0
+
+
+def _cmd_devices_unlink(args: argparse.Namespace) -> int:
+    device = _find_device(args.device)
+    if _profile_manager().unbind(device):
+        print(f"unlinked {device.name!r}")
+    else:
+        print(f"{device.name!r} had no preset linked")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trxmp-dsp",
@@ -263,6 +332,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "restore", help="hand config.txt back to whatever controlled it before Trxmp"
     )
     a_restore.set_defaults(handler=_cmd_apo_restore)
+
+    devices = commands.add_parser("devices", help="audio outputs and per-device profiles")
+    device_actions = devices.add_subparsers(dest="devices_action", required=True)
+
+    d_list = device_actions.add_parser("list", help="list audio outputs and their profiles")
+    d_list.set_defaults(handler=_cmd_devices_list)
+
+    d_link = device_actions.add_parser("link", help="auto-apply a preset for a device")
+    d_link.add_argument("--device", required=True, help="part of the device name")
+    d_link.add_argument("--preset", required=True, help="library preset name")
+    d_link.set_defaults(handler=_cmd_devices_link)
+
+    d_unlink = device_actions.add_parser("unlink", help="forget a device's profile")
+    d_unlink.add_argument("--device", required=True, help="part of the device name")
+    d_unlink.set_defaults(handler=_cmd_devices_unlink)
 
     return parser
 

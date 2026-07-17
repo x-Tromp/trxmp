@@ -8,39 +8,13 @@ demonstrable reason Dependency Inversion is worth the indirection.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 
+from tests.fakes import InMemoryPresetRepository
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.domain.errors import DuplicatePresetError, PresetNotFoundError
-from trxmp.domain.library import StoredPreset
 from trxmp.dsp.biquad import FilterType
-
-
-class InMemoryPresetRepository:
-    """A complete PresetRepository with no I/O — structural typing means
-    it needs no base class or registration to satisfy the Protocol."""
-
-    def __init__(self) -> None:
-        self._items: dict[str, StoredPreset] = {}
-
-    def get(self, name: str) -> StoredPreset | None:
-        return self._items.get(name)
-
-    def list_all(self) -> list[StoredPreset]:
-        return [self._items[name] for name in sorted(self._items)]
-
-    def upsert(self, name: str, description: str, preset: EqPreset) -> StoredPreset:
-        now = datetime.now(UTC)
-        created = self._items[name].created_at if name in self._items else now
-        stored = StoredPreset(name, description, preset, created_at=created, updated_at=now)
-        self._items[name] = stored
-        return stored
-
-    def delete(self, name: str) -> bool:
-        return self._items.pop(name, None) is not None
 
 
 @pytest.fixture

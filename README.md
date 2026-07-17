@@ -76,6 +76,22 @@ for one) claim it too. Trxmp keeps its filters in its own `trxmp.txt`,
 backs up `config.txt` exactly once before claiming it, never writes
 another tool's files, and can hand everything back with `apo restore`.
 
+### Devices & profiles
+
+Bind a preset to a device and Trxmp applies it automatically whenever
+Windows switches to it — headphones on, your curve is back.
+
+```powershell
+uv run trxmp-dsp devices list                                    # outputs, states, profiles
+uv run trxmp-dsp devices link --device Arctis --preset "Gaming"  # auto-apply on switch
+uv run trxmp-dsp devices unlink --device Arctis
+```
+
+`devices list` also flags outputs that Equalizer APO isn't attached to.
+APO is installed *per device*, so without that warning the EQ can be on,
+the curve set, and nothing happens — the most confusing failure this app
+could have.
+
 ### Preset library
 
 Presets live in a SQLite database under `%LOCALAPPDATA%\Equix\Trxmp`
@@ -96,7 +112,7 @@ uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
 - [x] **M2 — Domain & persistence**: `StoredPreset` entity, `PresetRepository` Protocol + SQLite/SQLAlchemy adapter, Pydantic-at-the-boundary JSON/YAML/CSV import-export, `trxmp-dsp preset` subcommands
 - [x] **M3 — UI shell**: token-based theme engine (dark/light × 6 accents, persisted), interactive EQ curve (drag = gain + frequency, wheel = Q, double-click = flatten), band controls, preset picker, live gain-staging readout
 - [x] **M4 — Equalizer APO backend**: `AudioBackend` Strategy interface, install detection, APO config rendering, live debounced apply, backup/restore of an existing controller's config
-- [ ] **M5 — Devices & profiles**: WASAPI device detection, auto profile switching
+- [x] **M5 — Devices & profiles**: Core Audio device detection (pycaw), per-device profiles with automatic preset switching, and a warning when Equalizer APO isn't hooked to the current device
 - [ ] **M6 — Preset ecosystem**: AutoEQ / EQ APO / Peace import, headphone catalog
 - [ ] **M7 — Spectrum analyzer**: read-only WASAPI loopback + real-time FFT view
 - [ ] **M8 — Lab mode**: pure-Python real-time pipeline via virtual device

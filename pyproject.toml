@@ -1,6 +1,6 @@
 [project]
 name = "trxmp"
-version = "0.4.0"
+version = "0.5.0"
 description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -8,6 +8,7 @@ authors = [{ name = "Equix", email = "equixete@gmail.com" }]
 dependencies = [
     "numpy>=2.1",
     "platformdirs>=4.2",
+    "pycaw>=20240210 ; sys_platform == 'win32'",
     "pydantic>=2.9",
     "pyside6>=6.9",
     "pyyaml>=6.0",
@@ -75,7 +76,7 @@ files = ["src", "tests"]
 # and contain the untypedness at call sites with typing.cast, instead of
 # letting `Any` silently spread through the codebase.
 [[tool.mypy.overrides]]
-module = ["scipy.*"]
+module = ["scipy.*", "pycaw.*", "comtypes.*"]
 ignore_missing_imports = true
 
 # pytest-qt's input-simulation helpers (qtbot.mousePress and friends) are
