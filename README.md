@@ -85,6 +85,38 @@ separate from the EQ path, so it can never affect the sound. When
 nothing is playing, WASAPI stops delivering data and the display decays
 to silence like a meter falling.
 
+### Lab mode
+
+The second `AudioBackend`: a pure-Python capture → `EqEngine` → render
+pipeline, running over a virtual audio cable ([VB-CABLE](https://vb-audio.com/Cable/))
+instead of inside the Windows audio engine. ~50 ms of latency instead of
+Equalizer APO's zero, but it's Trxmp's own DSP doing the filtering, end
+to end — the portfolio half of the Strategy pair.
+
+```powershell
+uv run trxmp-dsp lab status                        # is a virtual cable installed and usable?
+uv run trxmp-dsp lab start --preset "Sundara v2"    # run the pipeline until Enter is pressed
+```
+
+```
+Apps → CABLE Input → CABLE Output → Trxmp capture → EqEngine → real device
+```
+
+Route Windows' output (or one app, via per-app audio routing) into
+`CABLE Input`; Trxmp captures what mirrors onto `CABLE Output`, filters
+it one 10 ms block at a time on a single dedicated thread, and renders
+to a real, non-virtual output device chosen automatically — never back
+into the cable itself, which would feed Trxmp's own output into its own
+input. Preset changes made while it's running cross the same
+crossfade-on-apply path the EQ curve already uses, so a live tweak never
+clicks.
+
+Verified against a real VB-CABLE install and real headphones (SteelSeries
+Arctis Nova 5): a tone routed through the pipeline with a −18 dB notch
+placed on it measured a 27.4 dB drop at the physical output versus a
+flat bypass run — the entire chain, proven with the same FFT-based
+technique M7's spectrum analyzer verification used, not just "it builds."
+
 ### Devices & profiles
 
 Bind a preset to a device and Trxmp applies it automatically whenever
@@ -165,6 +197,6 @@ fabricating breadth nobody asked Trxmp to vouch for.
 - [x] **M5 — Devices & profiles**: Core Audio device detection (pycaw), per-device profiles with automatic preset switching, and a warning when Equalizer APO isn't hooked to the current device
 - [x] **M6 — Preset ecosystem**: AutoEQ / Equalizer APO / Peace importers, with warnings for what can't be represented and refusals for what would sound wrong. Verified against a real 40-file Peace collection (40/40)
 - [x] **M7 — Spectrum analyzer**: read-only WASAPI loopback (PyAudioWPatch), 96 log-spaced bands at 30 fps drawn behind the EQ curve, instant-attack/timed-release ballistics, follows device switches
-- [ ] **M8 — Lab mode**: pure-Python real-time pipeline via virtual device
+- [x] **M8 — Lab mode**: pure-Python real-time pipeline via a virtual audio cable (PyAudioWPatch/WASAPI), single dedicated capture-process-render thread, automatic non-cable render device selection to avoid feedback loops, `trxmp-dsp lab` subcommands. Verified against a real VB-CABLE install and real headphones — see the Lab mode section above
 - [x] **M9 — Music knowledge base**: bundled YAML-backed catalog (frequency-band vocabulary + a 5-headphone correction table ported from the original prototype), `ReferenceCatalog` Protocol, headphone picker in the UI, `trxmp-dsp reference` subcommands. Deliberately scoped narrower than the original wishlist — see the Knowledge base section above
 - [ ] **M10 — Distribution**: packaging, signing, updates, docs

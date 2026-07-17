@@ -23,6 +23,8 @@ Usage:
     trxmp-dsp reference headphones
     trxmp-dsp reference headphone hifiman_sundara
     trxmp-dsp reference frequency 3500
+    trxmp-dsp lab status
+    trxmp-dsp lab start --preset "Sundara v2"
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
 from trxmp.infrastructure.importers import import_preset_file
+from trxmp.infrastructure.lab_mode.backend import create_lab_mode_backend
+from trxmp.infrastructure.lab_mode.cable_detection import detect_virtual_cable, select_render_device
 from trxmp.infrastructure.preset_files import PresetDocument, save_preset_file
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
 from trxmp.infrastructure.reference_data.catalog import YamlReferenceCatalog
@@ -320,6 +324,56 @@ def _cmd_reference_frequency(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_lab_status(args: argparse.Namespace) -> int:
+    cable = detect_virtual_cable()
+    if cable is None:
+        print("state  : unavailable")
+        print("detail : no virtual audio cable found (install VB-CABLE)")
+        return 0
+    render_index = select_render_device()
+    print(f"cable capture device : {cable.capture_device_name}")
+    print(f"cable playback device: {cable.playback_device_name or '(not found)'}")
+    print(f"sample rate          : {cable.sample_rate} Hz, {cable.channels} ch")
+    if render_index is None:
+        print("render device        : none found (no non-cable output device)")
+    else:
+        print(f"render device        : {_pyaudio_device_name(render_index)}")
+    return 0
+
+
+def _pyaudio_device_name(device_index: int) -> str:
+    import pyaudiowpatch as pyaudio
+
+    with pyaudio.PyAudio() as audio:
+        return str(audio.get_device_info_by_index(device_index)["name"])
+
+
+def _cmd_lab_start(args: argparse.Namespace) -> int:
+    """Runs Lab mode in the foreground until Enter is pressed — the same
+    manual-verification ritual the original Rust prototype's
+    ``smoke_test`` example used, now against Trxmp's own pipeline."""
+    preset = _resolve_preset(args.preset, _library())
+    backend = create_lab_mode_backend(select_render_device())
+
+    if not backend.status.is_usable:
+        print(f"error: {backend.status.detail}", file=sys.stderr)
+        return 1
+
+    backend.apply(preset)
+    status = backend.status
+    print(f"state  : {status.state.value}")
+    print(f"detail : {status.detail}")
+    print()
+    print("Route the audio you want to hear into the virtual cable's playback")
+    print("device (set it as your Windows default output, or route one app to")
+    print("it), then press Enter to stop.")
+    input()
+
+    backend.disable()
+    print("stopped")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trxmp-dsp",
@@ -413,6 +467,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     r_frequency.add_argument("hz", type=float)
     r_frequency.set_defaults(handler=_cmd_reference_frequency)
+
+    lab = commands.add_parser("lab", help="the pure-Python real-time pipeline (needs VB-CABLE)")
+    lab_actions = lab.add_subparsers(dest="lab_action", required=True)
+
+    l_status = lab_actions.add_parser("status", help="is a virtual cable installed and usable?")
+    l_status.set_defaults(handler=_cmd_lab_status)
+
+    l_start = lab_actions.add_parser(
+        "start", help="run the pipeline in the foreground until Enter is pressed"
+    )
+    l_start.add_argument(
+        "--preset", default="flat", help="builtin or library preset name (default: %(default)s)"
+    )
+    l_start.set_defaults(handler=_cmd_lab_start)
 
     return parser
 

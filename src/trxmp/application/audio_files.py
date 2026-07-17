@@ -17,8 +17,8 @@ from pathlib import Path
 
 import numpy as np
 
+from trxmp.application.live_engine import resolve_preset_for_engine
 from trxmp.domain.equalizer import EqPreset
-from trxmp.dsp.biquad import design
 from trxmp.dsp.engine import EqEngine
 from trxmp.infrastructure.wav_io import load_wav, save_wav
 
@@ -46,13 +46,7 @@ def equalize_wav_file(input_path: Path, output_path: Path, preset: EqPreset) -> 
     data, sample_rate = load_wav(input_path)
     num_frames, num_channels = data.shape
 
-    preset.validate_for_sample_rate(sample_rate)
-    coefficients = [
-        design(band.filter_type, sample_rate, band.frequency_hz, band.gain_db, band.q)
-        for band in preset.bands
-    ]
-    applied_preamp_db = preset.safe_preamp_db(sample_rate)
-
+    coefficients, applied_preamp_db = resolve_preset_for_engine(preset, sample_rate)
     engine = EqEngine(sample_rate, num_channels)
     engine.apply(coefficients, applied_preamp_db, immediate=True)
 
