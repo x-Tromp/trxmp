@@ -8,6 +8,7 @@ authors = [{ name = "Equix", email = "equixete@gmail.com" }]
 dependencies = [
     "numpy>=2.1",
     "pyside6>=6.9",
+    "scipy>=1.14",
 ]
 
 [dependency-groups]
@@ -22,6 +23,11 @@ dev = [
 # which keeps the console attached so you can see logs and tracebacks.
 [project.gui-scripts]
 eqgenius = "eqgenius.app:main"
+
+# The offline processor is a real CLI, so it *wants* a console attached —
+# note the deliberate contrast with the GUI entry point above.
+[project.scripts]
+eqgenius-dsp = "eqgenius.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -50,6 +56,13 @@ select = [
 [tool.mypy]
 strict = true
 files = ["src", "tests"]
+
+# scipy ships no type information. We acknowledge that *explicitly* here
+# and contain the untypedness at call sites with typing.cast, instead of
+# letting `Any` silently spread through the codebase.
+[[tool.mypy.overrides]]
+module = ["scipy.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

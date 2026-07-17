@@ -1,0 +1,13 @@
+# Normalize line endings: everything text is stored as LF in the repo.
+# This kills the "LF will be replaced by CRLF" warnings and guarantees
+# identical checkouts across Windows/macOS/Linux collaborators and CI.
+* text=auto
+*.py text eol=lf
+*.toml text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+
+# Never touch binaries.
+*.wav binary
+*.png binary
+*.ico binary

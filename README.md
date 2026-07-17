@@ -54,7 +54,7 @@ All four quality gates must pass before every commit.
 ## Roadmap
 
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
-- [ ] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing
+- [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run eqgenius-dsp in.wav out.wav --preset smoke-test`)
 - [ ] **M2 — Domain & persistence**: Pydantic models, SQLite + SQLAlchemy, JSON/YAML/CSV import-export
 - [ ] **M3 — UI shell**: theme engine (dark/light/accent), interactive EQ curve, band controls
 - [ ] **M4 — Equalizer APO backend**: detect install, write configs, live system-wide EQ

@@ -12,3 +12,6 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+
+# Local listening-test output (regenerate with eqgenius-dsp)
+demo/

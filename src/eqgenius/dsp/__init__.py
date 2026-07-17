@@ -1,10 +1,17 @@
-"""DSP layer — pure numerical signal processing.
+"""DSP layer — numerical signal processing.
 
-What lives here: filter design, frequency-response math, FFT analysis,
-gain staging. Stateless, side-effect-free functions over NumPy arrays.
+Two kinds of code live here, with different contracts:
+
+- **Design & analysis functions** (``biquad``): pure and stateless —
+  same inputs, same outputs, trivially testable.
+- **Streaming processors** (``engine``, ``limiter``): carry *signal*
+  state (filter memories, limiter envelope) because IIR filtering is
+  inherently stateful across blocks. They still hold no application
+  state, do no I/O, and know nothing about presets, files, or Qt.
 
 Rules for this package:
-- Depends only on NumPy/SciPy. No Qt, no I/O, no app state.
-- Every public function must be deterministic: same inputs, same outputs.
-  That property is what makes this the easiest layer to test exhaustively.
+- Depends only on NumPy/SciPy. No Qt, no I/O, no imports from other
+  ``eqgenius`` layers — the engine consumes plain coefficients, not
+  domain objects, which is what keeps this layer reusable and the
+  dependency arrows pointing the right way.
 """
