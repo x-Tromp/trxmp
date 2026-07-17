@@ -33,3 +33,13 @@ class InvalidDeviceError(EqualizerError):
 
 class DeviceNotFoundError(EqualizerError):
     """No audio device matched what was asked for."""
+
+
+class PresetImportError(EqualizerError):
+    """A preset file from another tool could not be imported faithfully.
+
+    Raised only when importing anyway would produce audio that differs
+    from what the file describes — an unrepresentable filter, or a value
+    we would have to guess at. "We imported less than you asked for" is a
+    warning, not this.
+    """

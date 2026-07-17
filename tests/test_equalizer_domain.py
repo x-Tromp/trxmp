@@ -17,7 +17,16 @@ SAMPLE_RATE = 48_000.0
 class TestBandGuardrails:
     def test_rejects_boost_beyond_ceiling(self) -> None:
         with pytest.raises(InvalidBandError, match="gain"):
-            EqBand(FilterType.PEAKING, 1_000.0, gain_db=12.0, q=1.0)
+            EqBand(FilterType.PEAKING, 1_000.0, gain_db=15.0, q=1.0)
+
+    def test_accepts_the_values_real_presets_actually_use(self) -> None:
+        """Regression for M6. All three of these were rejected until a
+        real Peace collection proved the limits were taste, not
+        engineering: Peace writes 10 Hz bands and Q=0.01 tilts routinely,
+        and bass-boost presets reach +10 dB."""
+        EqBand(FilterType.LOW_SHELF, 10.0, gain_db=6.0, q=0.7)
+        EqBand(FilterType.PEAKING, 1_000.0, gain_db=1.0, q=0.01)
+        EqBand(FilterType.LOW_SHELF, 60.0, gain_db=10.0, q=0.7)
 
     def test_rejects_extreme_q(self) -> None:
         with pytest.raises(InvalidBandError, match="Q"):
@@ -75,6 +84,26 @@ class TestPresetHeadroom:
         assert preset.safe_preamp_db(SAMPLE_RATE) == pytest.approx(
             -HEADROOM_SAFETY_MARGIN_DB, abs=0.05
         )
+
+    def test_a_low_shelf_is_measured_at_its_plateau_not_its_corner(self) -> None:
+        """Regression for a real clipping bug M6 uncovered.
+
+        A low shelf has only *half* its boost at its corner frequency and
+        the full amount below it. The scan used to start at the lowest
+        legal band frequency, so a +12 dB shelf at 10 Hz measured as +6
+        and the preamp came out 6 dB too high — subsonic content nobody
+        can hear would have clipped anyway.
+        """
+        preset = EqPreset(bands=(EqBand(FilterType.LOW_SHELF, 10.0, 12.0, 0.7),))
+        assert preset.peak_response_db(SAMPLE_RATE) == pytest.approx(12.0, abs=0.1)
+        assert preset.safe_preamp_db(SAMPLE_RATE) == pytest.approx(-12.5, abs=0.1)
+
+    def test_a_high_shelf_is_measured_above_the_audible_range_too(self) -> None:
+        """The same bug at the other end: a shelf at 20 kHz reaches its
+        full boost above it, and every sample up to Nyquist can overflow
+        whether or not anyone can hear it."""
+        preset = EqPreset(bands=(EqBand(FilterType.HIGH_SHELF, 20_000.0, 12.0, 0.7),))
+        assert preset.peak_response_db(SAMPLE_RATE) == pytest.approx(12.0, abs=0.5)
 
 
 class TestPresetGuardrails:

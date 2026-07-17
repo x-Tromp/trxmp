@@ -46,7 +46,8 @@ from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRe
 from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
-from trxmp.infrastructure.preset_files import PresetDocument, load_preset_file, save_preset_file
+from trxmp.infrastructure.importers import import_preset_file
+from trxmp.infrastructure.preset_files import PresetDocument, save_preset_file
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
 from trxmp.infrastructure.windows_audio import PycawDeviceService
 
@@ -152,12 +153,16 @@ def _cmd_preset_import(args: argparse.Namespace) -> int:
     if not args.file.is_file():
         print(f"error: file not found: {args.file}", file=sys.stderr)
         return 2
-    document = load_preset_file(args.file)
-    name = args.name or document.name
-    stored = _library().save(
-        name, document.to_domain(), document.description, overwrite=args.overwrite
+    imported = import_preset_file(args.file)
+    name = args.name or imported.name
+    stored = _library().save(name, imported.preset, imported.description, overwrite=args.overwrite)
+    print(
+        f"imported {stored.name!r} ({len(stored.preset.bands)} bands) from {imported.source_format}"
     )
-    print(f"imported {stored.name!r} ({len(stored.preset.bands)} bands)")
+    # Printed after the success line, not instead of it: the import
+    # worked, and these are things the file had that Trxmp doesn't.
+    for warning in imported.warnings:
+        print(f"  note: {warning}")
     return 0
 
 
@@ -300,7 +305,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p_show.add_argument("name")
     p_show.set_defaults(handler=_cmd_preset_show)
 
-    p_import = actions.add_parser("import", help="import a .json/.yaml/.csv preset file")
+    p_import = actions.add_parser(
+        "import",
+        help="import a preset (.json/.yaml/.csv, .txt from Equalizer APO or AutoEQ, .peace)",
+    )
     p_import.add_argument("file", type=Path)
     p_import.add_argument("--name", help="store under this name (default: name in the file)")
     p_import.add_argument("--overwrite", action="store_true", help="replace an existing preset")

@@ -105,6 +105,19 @@ uv run trxmp-dsp preset export "Sundara" out.json
 uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
 ```
 
+`preset import` also reads other tools' formats:
+
+| Format | Extension | Notes |
+| --- | --- | --- |
+| AutoEQ / Equalizer APO | `.txt` | AutoEQ's `ParametricEQ.txt` — one parser, thousands of measured headphone curves |
+| Peace | `.peace` | Warns about per-channel EQ and Peace's extra bass boost, which Trxmp can't represent |
+| Trxmp | `.json` `.yaml` `.csv` | The native round-trip format |
+
+Imports never silently change how a preset sounds: anything unrepresentable
+(a notch filter, an unrecognised Peace filter code) refuses rather than
+guessing, and anything imported *smaller* than the file describes prints a
+note saying so.
+
 ## Roadmap
 
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
@@ -113,7 +126,7 @@ uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
 - [x] **M3 — UI shell**: token-based theme engine (dark/light × 6 accents, persisted), interactive EQ curve (drag = gain + frequency, wheel = Q, double-click = flatten), band controls, preset picker, live gain-staging readout
 - [x] **M4 — Equalizer APO backend**: `AudioBackend` Strategy interface, install detection, APO config rendering, live debounced apply, backup/restore of an existing controller's config
 - [x] **M5 — Devices & profiles**: Core Audio device detection (pycaw), per-device profiles with automatic preset switching, and a warning when Equalizer APO isn't hooked to the current device
-- [ ] **M6 — Preset ecosystem**: AutoEQ / EQ APO / Peace import, headphone catalog
+- [x] **M6 — Preset ecosystem**: AutoEQ / Equalizer APO / Peace importers, with warnings for what can't be represented and refusals for what would sound wrong. Verified against a real 40-file Peace collection (40/40)
 - [ ] **M7 — Spectrum analyzer**: read-only WASAPI loopback + real-time FFT view
 - [ ] **M8 — Lab mode**: pure-Python real-time pipeline via virtual device
 - [ ] **M9 — Music knowledge base**: structured audio/production reference database

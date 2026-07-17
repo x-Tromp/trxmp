@@ -1,13 +1,37 @@
 """EQ bands and presets — the domain's core value objects.
 
-Guardrails (ported from the Rust engine, with the same rationale):
-- Boosts beyond +9 dB are rarely used by mastering engineers; past that
-  a boost emphasizes resonances rather than correcting balance, and it
-  eats headroom fast when bands overlap.
-- Cuts remove energy (no clipping risk), so the range is wider; narrow
-  notches for driver-resonance correction can legitimately need -18 dB.
-- Q outside [0.1, 10] is either a near-flat tilt (redundant with a
-  shelf) or risks audible ringing on transients.
+A note on the guardrails below, because their history is the lesson.
+They arrived from the Rust prototype justified by "professional
+judgment": +9 dB is all a mastering engineer needs, Q below 0.1 is a
+pointless near-flat tilt, 12 bands is plenty. Reasonable-sounding, and
+invented in a vacuum.
+
+Then M6 pointed the importers at a real Peace collection — 40 files a
+real person actually uses — and the guardrails rejected 31 of them. Not
+because the files were bad: because Peace routinely writes 10 Hz bands
+(a shelf's corner sits below the audible range; its slope is what you
+hear), Q values of 0.01 (a deliberate broad tilt), and 13-band presets.
+The limits weren't protecting anyone. They were taste, dressed up as
+expertise, silently deleting other people's work.
+
+So each one now has to justify itself by physics, numerics, or evidence:
+
+- **Frequency** [10 Hz, 20 kHz]: a *filter* may sit below hearing — what
+  matters is where its slope lands. The floor is where real tools put
+  theirs (Peace, Pro-Q), comfortably clear of the numerical trouble that
+  only starts when w0 approaches zero.
+- **Nyquist** (a separate, context-dependent check): real. RBJ
+  coefficients genuinely destabilise as w0 approaches pi.
+- **Gain** [-18, +12] dB: boosts eat headroom, and far past this a boost
+  emphasises resonances rather than shaping balance. Cuts remove energy
+  (no clipping risk) so the range is wider; narrow notches for
+  driver-resonance correction can legitimately need -18 dB. The +12
+  ceiling is still a judgment — but a mainstream one (it's the range
+  most graphic EQs offer) rather than an idiosyncratic one, and the
+  automatic headroom preamp is what makes a boost that large safe.
+- **Q** [0.01, 10]: the floor is evidence (Peace uses 0.01 for wide
+  tilts, and the maths is perfectly stable there). The ceiling is real:
+  past Q≈10 a filter rings audibly on transients.
 
 Python-specific design choice: guardrails are enforced in
 ``__post_init__``, so an out-of-range band *cannot exist* — versus the
@@ -27,14 +51,32 @@ import numpy as np
 from trxmp.domain.errors import InvalidBandError, InvalidPresetError
 from trxmp.dsp.biquad import FilterType, design, magnitude_response_db
 
-MAX_BOOST_DB = 9.0
+# Raised from 9.0 in M6: bass-boost presets in the wild reach +10, and a
+# limit that rejects them while advertising automatic clipping protection
+# is incoherent — the headroom preamp exists precisely so a boost this
+# size is safe.
+MAX_BOOST_DB = 12.0
 MAX_CUT_DB = -18.0
-MIN_Q = 0.1
+# Lowered from 0.1 in M6: 8 of the user's own presets use Q=0.01 for a
+# deliberate broad tilt, and the biquad maths is stable there (as Q
+# falls, a peaking filter simply widens toward a flat gain).
+MIN_Q = 0.01
 MAX_Q = 10.0
-MIN_FREQUENCY_HZ = 20.0
+# Lowered from 20 Hz in M6: 22 real Peace files place bands at 10 Hz.
+# A filter is not a tone — its corner can sit below hearing while its
+# slope shapes what you actually hear.
+MIN_FREQUENCY_HZ = 10.0
 MAX_FREQUENCY_HZ = 20_000.0
 
-MAX_BANDS = 12
+# Raised from 12 to 32 in M6, on evidence rather than taste. The old
+# limit was inherited from the Rust prototype and never justified; when
+# the importers met a real Peace collection it rejected 25 of 40 files —
+# 23 of them ordinary 13-band presets, one a 31-band ISO third-octave
+# graphic EQ. 32 covers that standard layout with room to spare, and the
+# limit's real job is unchanged: stop a corrupt file claiming 100000
+# bands, not enforce taste. Thirty-two biquads cost nothing (scipy runs
+# them in compiled code, and Equalizer APO has no practical limit).
+MAX_BANDS = 32
 MIN_PREAMP_DB = -24.0
 # Capped at 0 dB on purpose: this engine's job is to keep playback safe,
 # not to make things louder. "Louder" is a loudness-normalization
@@ -46,6 +88,16 @@ MAX_PREAMP_DB = 0.0
 HEADROOM_SAFETY_MARGIN_DB = 0.5
 
 _RESPONSE_SCAN_POINTS = 256
+
+# The headroom scan's floor sits well below MIN_FREQUENCY_HZ on purpose,
+# and this is a real bug fix rather than a tweak. A low shelf reaches its
+# *full* boost below its corner frequency — at the corner itself it has
+# only half of it. Scanning from the lowest legal band frequency would
+# therefore find +6 dB on a +12 dB shelf and set the preamp 6 dB too
+# high, and the clipping would land on subsonic content nobody can hear
+# but every sample can overflow on. One hertz is far enough below any
+# legal band for the plateau to be fully in view.
+_ANALYSIS_FLOOR_HZ = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,12 +184,18 @@ class EqPreset:
         signal-independent way to know how much headroom a preset needs:
         naive summing over-corrects when bands don't overlap and
         under-corrects when they do.
+
+        The scan deliberately covers more than the audible range: it runs
+        from :data:`_ANALYSIS_FLOOR_HZ` to just under Nyquist, because
+        every one of those frequencies is a real sample that can really
+        clip. Anything a shelf does out at the edges counts, whether or
+        not a human would notice it directly.
         """
         if not self.bands:
             return 0.0
 
-        highest_hz = min(sample_rate / 2.0 * 0.99, MAX_FREQUENCY_HZ)
-        frequencies = np.geomspace(MIN_FREQUENCY_HZ, highest_hz, _RESPONSE_SCAN_POINTS)
+        highest_hz = sample_rate / 2.0 * 0.99
+        frequencies = np.geomspace(_ANALYSIS_FLOOR_HZ, highest_hz, _RESPONSE_SCAN_POINTS)
 
         total = np.zeros(_RESPONSE_SCAN_POINTS)
         for band in self.bands:

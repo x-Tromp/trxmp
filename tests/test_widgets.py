@@ -15,7 +15,7 @@ from PySide6.QtWidgets import QWidget
 from pytestqt.qtbot import QtBot
 
 from trxmp.application.preferences import AccentColor, ThemeMode
-from trxmp.domain.equalizer import EqBand, EqPreset
+from trxmp.domain.equalizer import MAX_BOOST_DB, EqBand, EqPreset
 from trxmp.dsp.biquad import FilterType
 from trxmp.ui.theme import Theme
 from trxmp.ui.view_models import EqViewModel
@@ -104,12 +104,12 @@ class TestEqCurveWidget:
     def test_drag_is_clamped_to_the_guardrails(
         self, qtbot: QtBot, curve: EqCurveWidget, model: EqViewModel
     ) -> None:
-        """Dragging far past the top of the widget must saturate at
-        +9 dB, not raise InvalidBandError in a paint loop."""
+        """Dragging far past the top of the widget must saturate at the
+        domain's ceiling, not raise InvalidBandError in a paint loop."""
         index = 4
         start = curve._handle_center(index).toPoint()
         _drag(qtbot, curve, start, QPoint(start.x(), -500))
-        assert model.bands[index].gain_db == 9.0
+        assert model.bands[index].gain_db == MAX_BOOST_DB
 
     def test_double_click_flattens_a_band(
         self, qtbot: QtBot, curve: EqCurveWidget, model: EqViewModel
@@ -175,6 +175,16 @@ class TestBandControls:
         for value in range(-90, 91, 10):
             controls._sliders[0].slider.setValue(value)
         assert model.bands[0].gain_db == 9.0
+
+    def test_slider_range_spans_the_whole_domain(self, qtbot: QtBot, model: EqViewModel) -> None:
+        """A slider narrower than the domain would clamp an imported
+        -15 dB band to what it could show, displaying one number while
+        the engine used another."""
+        controls = BandControls(model)
+        qtbot.addWidget(controls)
+        model.load(EqPreset(bands=(EqBand(FilterType.PEAKING, 1_000.0, -15.0, 1.0),)))
+        assert controls._sliders[0].slider.value() == -150
+        assert controls._sliders[0].value_label.text() == "-15.0"
 
     def test_curve_and_sliders_stay_in_sync_through_the_model(
         self, qtbot: QtBot, model: EqViewModel

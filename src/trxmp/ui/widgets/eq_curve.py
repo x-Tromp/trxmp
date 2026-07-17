@@ -36,14 +36,21 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from trxmp.application.eq_analysis import compute_response_curve
-from trxmp.domain.equalizer import MAX_FREQUENCY_HZ, MIN_FREQUENCY_HZ
+from trxmp.domain.equalizer import (
+    MAX_CUT_DB,
+    MAX_FREQUENCY_HZ,
+    MIN_FREQUENCY_HZ,
+)
 from trxmp.ui.theme import FONT_SIZE_CAPTION, Palette
 from trxmp.ui.view_models import EqViewModel
 
-# ± this many dB fills the vertical axis. 12 leaves the ±9 dB guardrail
-# comfortably inside the frame instead of pinned to the edges.
-DB_RANGE = 12.0
-GRID_DB = (-9, -6, -3, 0, 3, 6, 9)
+# The vertical axis is *derived* from the domain's own limits, never
+# picked to look nice. Hardcoding it to ±12 left a latent bug: the domain
+# allows an -18 dB cut, so an imported band that deep drew its handle
+# outside the plot — invisible, and impossible to drag back. A UI range
+# narrower than the data it displays is a UI that lies.
+DB_RANGE = abs(MAX_CUT_DB)
+GRID_DB = (-18, -12, -6, 0, 6, 12, 18)
 GRID_FREQUENCIES = (32, 64, 125, 250, 500, 1_000, 2_000, 4_000, 8_000, 16_000)
 
 MARGIN_LEFT = 40

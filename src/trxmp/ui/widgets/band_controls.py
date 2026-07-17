@@ -13,9 +13,9 @@ rebuild", ``bands_changed`` means "the values moved, refresh".
 
 The one Qt wrinkle worth knowing: ``QSlider`` is integer-only. Gains are
 floats in dB, so every slider works in tenths of a dB internally
-(``-90..90`` means -9.0..+9.0 dB) and converts at the boundary. Scaling
-like this is the standard workaround; the alternative (a custom float
-slider) is a lot of code for no user-visible gain.
+(``-180..120`` means -18.0..+12.0 dB) and converts at the boundary.
+Scaling like this is the standard workaround; the alternative (a custom
+float slider) is a lot of code for no user-visible gain.
 """
 
 from __future__ import annotations
@@ -30,14 +30,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from trxmp.domain.equalizer import MAX_BOOST_DB, MAX_PREAMP_DB, MIN_PREAMP_DB
+from trxmp.domain.equalizer import MAX_BOOST_DB, MAX_CUT_DB, MAX_PREAMP_DB, MIN_PREAMP_DB
 from trxmp.ui.theme import SPACE_MD, SPACE_SM
 from trxmp.ui.view_models import EqViewModel
 
-# Sliders travel +/-9 dB (the domain's boost guardrail) rather than the
-# full -18 dB cut range: a symmetric control is far easier to read, and
-# deep surgical cuts belong on the curve, not on a graphic slider.
-_SLIDER_LIMIT_DB = MAX_BOOST_DB
+# Sliders span exactly the domain's gain range — asymmetric (-18..+12)
+# and slightly odd-looking, but truthful. A prettier symmetric range
+# would silently clamp an imported -15 dB band to whatever the slider
+# could show, displaying one number while the engine used another.
 _SCALE = 10  # slider units per dB
 _STEP_DB = 0.5
 
@@ -134,9 +134,7 @@ class BandControls(QWidget):
         self._sliders.clear()
 
         for index, band in enumerate(self._model.bands):
-            slider = _LabelledSlider(
-                _format_hz(band.frequency_hz), -_SLIDER_LIMIT_DB, _SLIDER_LIMIT_DB, self
-            )
+            slider = _LabelledSlider(_format_hz(band.frequency_hz), MAX_CUT_DB, MAX_BOOST_DB, self)
             # Late binding trap: `index` must be captured now via a
             # default argument. A bare closure over `index` would leave
             # every slider pointing at the last band.

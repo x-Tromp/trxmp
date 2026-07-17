@@ -12,7 +12,9 @@ from pytestqt.qtbot import QtBot
 from trxmp.domain.equalizer import (
     MAX_BOOST_DB,
     MAX_CUT_DB,
+    MAX_FREQUENCY_HZ,
     MAX_Q,
+    MIN_FREQUENCY_HZ,
     MIN_Q,
     EqBand,
     EqPreset,
@@ -67,11 +69,11 @@ def test_q_is_clamped(model: EqViewModel) -> None:
     assert model.bands[0].q == MIN_Q
 
 
-def test_frequency_is_clamped_to_the_audible_range(model: EqViewModel) -> None:
-    model.set_band_frequency(0, 1.0)
-    assert model.bands[0].frequency_hz == 20.0
+def test_frequency_is_clamped_to_the_domains_range(model: EqViewModel) -> None:
+    model.set_band_frequency(0, 0.5)
+    assert model.bands[0].frequency_hz == MIN_FREQUENCY_HZ
     model.set_band_frequency(0, 96_000.0)
-    assert model.bands[0].frequency_hz == 20_000.0
+    assert model.bands[0].frequency_hz == MAX_FREQUENCY_HZ
 
 
 def test_preamp_clamps_and_emits(qtbot: QtBot, model: EqViewModel) -> None:

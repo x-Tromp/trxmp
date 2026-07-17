@@ -6,7 +6,13 @@ import numpy as np
 import pytest
 
 from trxmp.application.eq_analysis import compute_response_curve
-from trxmp.domain.equalizer import EqBand, EqPreset, default_graphic_preset
+from trxmp.domain.equalizer import (
+    MAX_FREQUENCY_HZ,
+    MIN_FREQUENCY_HZ,
+    EqBand,
+    EqPreset,
+    default_graphic_preset,
+)
 from trxmp.dsp.biquad import FilterType
 
 
@@ -23,10 +29,19 @@ def test_default_graphic_preset_starts_flat() -> None:
     assert np.max(np.abs(curve.magnitudes_db)) < 0.01
 
 
-def test_frequencies_are_log_spaced_and_span_the_audible_range() -> None:
+def test_frequencies_are_log_spaced_and_span_the_bands_own_range() -> None:
+    """The drawn curve spans exactly the range a band may live in, so
+    every handle is reachable — a 10 Hz band on a 20 Hz axis would be a
+    control the user can see the effect of but never grab.
+
+    Deliberately *not* the same range as the domain's headroom scan,
+    which runs from 1 Hz to Nyquist because everything out there can
+    still clip. Two ranges, two jobs: this one is for eyes, that one is
+    for safety.
+    """
     curve = compute_response_curve(EqPreset.flat(), num_points=64)
-    assert curve.frequencies_hz[0] == pytest.approx(20.0)
-    assert curve.frequencies_hz[-1] == pytest.approx(20_000.0, rel=0.02)
+    assert curve.frequencies_hz[0] == pytest.approx(MIN_FREQUENCY_HZ)
+    assert curve.frequencies_hz[-1] == pytest.approx(MAX_FREQUENCY_HZ, rel=0.02)
     # Log spacing = constant ratio between neighbours.
     ratios = curve.frequencies_hz[1:] / curve.frequencies_hz[:-1]
     assert np.allclose(ratios, ratios[0])
@@ -51,14 +66,19 @@ def test_curve_excludes_preamp_by_design() -> None:
 
 def test_curve_matches_the_domains_own_peak_calculation() -> None:
     """The drawn curve and the headroom engine must agree — if they
-    ever diverge, the UI is lying about what the audio will do."""
+    ever diverge, the UI is lying about what the audio will do.
+
+    Bells well inside the audible range, so the two grids see the same
+    peak. (A shelf would legitimately differ: the headroom scan looks
+    past the edges of hearing, and the curve does not.)
+    """
     preset = EqPreset(
         bands=(
             EqBand(FilterType.PEAKING, 900.0, 5.0, 1.0),
             EqBand(FilterType.PEAKING, 1_100.0, 5.0, 1.0),
         )
     )
-    curve = compute_response_curve(preset, num_points=256)
+    curve = compute_response_curve(preset, num_points=1_024)
     assert float(np.max(curve.magnitudes_db)) == pytest.approx(
-        preset.peak_response_db(48_000.0), abs=0.01
+        preset.peak_response_db(48_000.0), abs=0.05
     )
