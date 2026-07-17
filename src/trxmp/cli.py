@@ -20,6 +20,9 @@ Usage:
     trxmp-dsp devices list
     trxmp-dsp devices link --device Sundara --preset "Sundara v2"
     trxmp-dsp devices unlink --device Sundara
+    trxmp-dsp reference headphones
+    trxmp-dsp reference headphone hifiman_sundara
+    trxmp-dsp reference frequency 3500
 """
 
 from __future__ import annotations
@@ -39,7 +42,7 @@ from trxmp.application.devices import ProfileManager
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.devices import AudioDevice
 from trxmp.domain.equalizer import EqBand, EqPreset
-from trxmp.domain.errors import DeviceNotFoundError, EqualizerError
+from trxmp.domain.errors import DeviceNotFoundError, EqualizerError, HeadphoneNotFoundError
 from trxmp.dsp.biquad import FilterType
 from trxmp.infrastructure.database import create_default_engine
 from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRepository
@@ -49,6 +52,7 @@ from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for
 from trxmp.infrastructure.importers import import_preset_file
 from trxmp.infrastructure.preset_files import PresetDocument, save_preset_file
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
+from trxmp.infrastructure.reference_data.catalog import YamlReferenceCatalog
 from trxmp.infrastructure.windows_audio import PycawDeviceService
 
 _DISPLAY_SAMPLE_RATE = 48_000.0
@@ -278,6 +282,44 @@ def _cmd_devices_unlink(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_reference_headphones(args: argparse.Namespace) -> int:
+    for headphone in YamlReferenceCatalog().list_headphones():
+        measured = "measured" if headphone.is_measured else "approximate"
+        print(f"{headphone.id:<18} {headphone.name:<30} [{headphone.category.value}, {measured}]")
+    return 0
+
+
+def _cmd_reference_headphone(args: argparse.Namespace) -> int:
+    headphone = YamlReferenceCatalog().get_headphone(args.id)
+    if headphone is None:
+        raise HeadphoneNotFoundError(f"no headphone {args.id!r} in the catalog")
+    print(f"name         : {headphone.name}")
+    print(f"manufacturer : {headphone.manufacturer}")
+    print(f"category     : {headphone.category.value}")
+    if headphone.notes:
+        print(f"notes        : {headphone.notes}")
+    print(f"measured     : {'yes' if headphone.is_measured else 'no — approximate correction'}")
+    if headphone.source:
+        print(f"source       : {headphone.source}")
+    print(f"correction   : {len(headphone.correction)} bands")
+    for band in headphone.correction:
+        print(
+            f"  {band.filter_type.value:<10} {band.frequency_hz:>8.1f} Hz  "
+            f"{band.gain_db:+5.1f} dB  Q {band.q:.2f}"
+        )
+    return 0
+
+
+def _cmd_reference_frequency(args: argparse.Namespace) -> int:
+    band = YamlReferenceCatalog().describe_frequency(args.hz)
+    if band is None:
+        print(f"{args.hz:g} Hz is outside the catalog's covered range")
+        return 0
+    print(f"{args.hz:g} Hz falls in {band.name} ({band.low_hz:g}-{band.high_hz:g} Hz)")
+    print(band.description)
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trxmp-dsp",
@@ -355,6 +397,22 @@ def _build_parser() -> argparse.ArgumentParser:
     d_unlink = device_actions.add_parser("unlink", help="forget a device's profile")
     d_unlink.add_argument("--device", required=True, help="part of the device name")
     d_unlink.set_defaults(handler=_cmd_devices_unlink)
+
+    reference = commands.add_parser("reference", help="the bundled audio knowledge base")
+    reference_actions = reference.add_subparsers(dest="reference_action", required=True)
+
+    r_headphones = reference_actions.add_parser("headphones", help="list the headphone catalog")
+    r_headphones.set_defaults(handler=_cmd_reference_headphones)
+
+    r_headphone = reference_actions.add_parser("headphone", help="show one headphone's correction")
+    r_headphone.add_argument("id", help="catalog id, e.g. hifiman_sundara")
+    r_headphone.set_defaults(handler=_cmd_reference_headphone)
+
+    r_frequency = reference_actions.add_parser(
+        "frequency", help="which named region a frequency falls in"
+    )
+    r_frequency.add_argument("hz", type=float)
+    r_frequency.set_defaults(handler=_cmd_reference_frequency)
 
     return parser
 

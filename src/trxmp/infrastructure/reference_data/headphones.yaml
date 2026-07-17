@@ -1,0 +1,88 @@
+# Correction curves ported verbatim from the original Tauri/Rust
+# prototype's apply_headphone_correction() — continuing a feature the
+# earlier app already had, not inventing a new one. None of these are
+# measurements Trxmp itself has taken (see is_measured/source on each
+# entry): they're a small, honestly-labelled starting point, safe to
+# extend with real AutoEQ-derived curves later without touching any code
+# — that's the entire reason this lives in a data file.
+headphones:
+  - id: hifiman_sundara
+    name: HiFiMan Sundara
+    manufacturer: HiFiMan
+    category: planar
+    notes: A single bell taming the 4-6 kHz peak common to Sundara units.
+    is_measured: false
+    source: Ported from the original EQ Genius prototype's built-in correction table.
+    correction:
+      - filter_type: peaking
+        frequency_hz: 4500
+        gain_db: -3.0
+        q: 2.5
+
+  - id: hd600
+    name: Sennheiser HD 600
+    manufacturer: Sennheiser
+    category: dynamic
+    notes: A gentle bass lift plus a small dip around 3 kHz.
+    is_measured: false
+    source: Ported from the original EQ Genius prototype's built-in correction table.
+    correction:
+      - filter_type: low_shelf
+        frequency_hz: 60
+        gain_db: 1.5
+        q: 0.7
+      - filter_type: peaking
+        frequency_hz: 3000
+        gain_db: -1.5
+        q: 2.0
+
+  - id: dt770_250
+    name: Beyerdynamic DT 770 Pro 250 Ohm
+    manufacturer: Beyerdynamic
+    category: dynamic
+    notes: Softens the DT 770's V-shape and its treble peak.
+    is_measured: false
+    source: Ported from the original EQ Genius prototype's built-in correction table.
+    correction:
+      - filter_type: peaking
+        frequency_hz: 200
+        gain_db: -1.5
+        q: 1.2
+      - filter_type: peaking
+        frequency_hz: 8500
+        gain_db: -3.0
+        q: 2.0
+
+  - id: sony_xm5
+    name: Sony WH-1000XM5
+    manufacturer: Sony
+    category: wireless
+    notes: Reins in ANC-driven bass bloat and lifts a slightly recessed midrange.
+    is_measured: false
+    source: Ported from the original EQ Genius prototype's built-in correction table.
+    correction:
+      - filter_type: peaking
+        frequency_hz: 100
+        gain_db: -2.0
+        q: 1.0
+      - filter_type: peaking
+        frequency_hz: 1500
+        gain_db: 1.5
+        q: 1.5
+
+  - id: airpods_pro2
+    name: Apple AirPods Pro 2
+    manufacturer: Apple
+    category: iem
+    notes: Tightens loose bass and lifts presence for clarity.
+    is_measured: false
+    source: Ported from the original EQ Genius prototype's built-in correction table.
+    correction:
+      - filter_type: peaking
+        frequency_hz: 80
+        gain_db: -1.5
+        q: 1.0
+      - filter_type: peaking
+        frequency_hz: 3000
+        gain_db: 1.0
+        q: 2.0

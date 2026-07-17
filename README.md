@@ -127,6 +127,34 @@ Imports never silently change how a preset sounds: anything unrepresentable
 guessing, and anything imported *smaller* than the file describes prints a
 note saying so.
 
+### Knowledge base
+
+A small, honestly-scoped reference database, bundled as YAML rather than
+hardcoded — the difference between a data change and a code change when
+it's time to extend it:
+
+```powershell
+uv run trxmp-dsp reference headphones             # the correction catalog
+uv run trxmp-dsp reference headphone hifiman_sundara
+uv run trxmp-dsp reference frequency 3500          # "Upper-mids": clarity, harshness
+```
+
+The headphone corrections are ported verbatim from the original
+Tauri/Rust prototype's correction table — continuing a feature the
+earlier app already had, not inventing a new one. None of them are
+measurements Trxmp itself has taken (`is_measured` is `false` on every
+entry, and `source` says so explicitly); the UI's headphone picker loads
+one as a starting-point curve, replacing whatever's currently on the
+graph rather than merging into it. The frequency-band vocabulary
+(sub-bass through air) is the standard terminology most mixing
+references already use.
+
+Deliberately narrower than "every audio-engineering topic" — genres,
+mixing technique, room acoustics and the rest of the original spec's
+wishlist aren't here. Shipping a small, verifiable slice with a real
+extension point (add an entry to the YAML, no code change) beats
+fabricating breadth nobody asked Trxmp to vouch for.
+
 ## Roadmap
 
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
@@ -138,5 +166,5 @@ note saying so.
 - [x] **M6 — Preset ecosystem**: AutoEQ / Equalizer APO / Peace importers, with warnings for what can't be represented and refusals for what would sound wrong. Verified against a real 40-file Peace collection (40/40)
 - [x] **M7 — Spectrum analyzer**: read-only WASAPI loopback (PyAudioWPatch), 96 log-spaced bands at 30 fps drawn behind the EQ curve, instant-attack/timed-release ballistics, follows device switches
 - [ ] **M8 — Lab mode**: pure-Python real-time pipeline via virtual device
-- [ ] **M9 — Music knowledge base**: structured audio/production reference database
+- [x] **M9 — Music knowledge base**: bundled YAML-backed catalog (frequency-band vocabulary + a 5-headphone correction table ported from the original prototype), `ReferenceCatalog` Protocol, headphone picker in the UI, `trxmp-dsp reference` subcommands. Deliberately scoped narrower than the original wishlist — see the Knowledge base section above
 - [ ] **M10 — Distribution**: packaging, signing, updates, docs

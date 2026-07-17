@@ -20,8 +20,10 @@ from numpy.typing import NDArray
 from trxmp.application.audio_backend import BackendError, BackendState, BackendStatus
 from trxmp.application.preferences import Preferences
 from trxmp.domain.devices import AudioDevice, DeviceProfile, DeviceState
-from trxmp.domain.equalizer import EqPreset
+from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.domain.library import StoredPreset
+from trxmp.domain.reference import FrequencyBand, HeadphoneCategory, HeadphoneModel
+from trxmp.dsp.biquad import FilterType
 
 ARCTIS = AudioDevice(
     id="arctis-id", name="Arctis Nova 5", state=DeviceState.ACTIVE, is_default=True
@@ -157,3 +159,31 @@ class FakeCaptureSource:
 
     def read_latest(self, num_frames: int) -> NDArray[np.float32] | None:
         return self.block
+
+
+TEST_HEADPHONE = HeadphoneModel(
+    id="test_hp",
+    name="Test Headphone",
+    manufacturer="Test Co",
+    category=HeadphoneCategory.PLANAR,
+    correction=(EqBand(FilterType.PEAKING, 4_500.0, -3.0, 2.5),),
+    notes="a fake catalog entry for tests",
+    source="tests/fakes.py",
+)
+
+
+class FakeReferenceCatalog:
+    def __init__(self, headphones: tuple[HeadphoneModel, ...] = (TEST_HEADPHONE,)) -> None:
+        self._headphones = headphones
+
+    def list_headphones(self) -> list[HeadphoneModel]:
+        return list(self._headphones)
+
+    def get_headphone(self, headphone_id: str) -> HeadphoneModel | None:
+        return next((h for h in self._headphones if h.id == headphone_id), None)
+
+    def list_frequency_bands(self) -> list[FrequencyBand]:
+        return []
+
+    def describe_frequency(self, frequency_hz: float) -> FrequencyBand | None:
+        return None

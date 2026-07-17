@@ -15,16 +15,19 @@ from pytestqt.qtbot import QtBot
 from tests.fakes import (
     ARCTIS,
     SPEAKERS,
+    TEST_HEADPHONE,
     FakeBackend,
     FakeCaptureSource,
     FakeDeviceService,
     FakePreferencesStore,
+    FakeReferenceCatalog,
     InMemoryDeviceProfileRepository,
     InMemoryPresetRepository,
 )
 from trxmp.application.devices import ProfileManager
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
+from trxmp.application.reference import ReferenceCatalog
 from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.dsp.biquad import FilterType
 from trxmp.ui.main_window import MainWindow
@@ -51,6 +54,7 @@ def _window(
     profile_manager: ProfileManager | None = None,
     apo_support_check: object = None,
     capture_source: FakeCaptureSource | None = None,
+    reference_catalog: ReferenceCatalog | None = None,
 ) -> MainWindow:
     library = PresetLibrary(repository)
     window = MainWindow(
@@ -61,6 +65,7 @@ def _window(
         profile_manager or ProfileManager(InMemoryDeviceProfileRepository(), library),
         apo_support_check,  # type: ignore[arg-type]
         capture_source,
+        reference_catalog,
     )
     qtbot.addWidget(window)
     return window
@@ -401,3 +406,46 @@ class TestSpectrum:
         window = _window(qtbot, repository, store, capture_source=capture)
         window.close()
         assert not capture.started
+
+
+class TestHeadphoneCatalog:
+    def test_no_catalog_means_no_picker(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """Same optionality as the spectrum button: a knowledge base is
+        a real feature, not a requirement for the EQ to work."""
+        window = _window(qtbot, repository, store)
+        window.show()
+        assert not window._headphone_box.isVisible()
+
+    def test_a_supplied_catalog_populates_and_reveals_the_picker(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(qtbot, repository, store, reference_catalog=FakeReferenceCatalog())
+        window.show()
+        assert window._headphone_box.isVisible()
+        assert window._headphone_box.count() == 1
+        assert window._headphone_box.itemText(0) == TEST_HEADPHONE.name
+
+    def test_selecting_a_headphone_loads_its_correction_as_the_current_curve(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(qtbot, repository, store, reference_catalog=FakeReferenceCatalog())
+        window._model.set_band_gain(0, 7.0)  # something on the curve beforehand
+
+        window._headphone_box.setCurrentIndex(0)
+        window._on_headphone_selected(0)
+
+        assert window._model.bands == TEST_HEADPHONE.correction  # replaced, not merged
+
+    def test_picking_headphones_twice_does_not_accumulate_bands(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """Regression guard for the exact failure mode a merge-instead-
+        of-replace design would have: clicking the same entry (or two
+        different ones) repeatedly must never grow the band count."""
+        window = _window(qtbot, repository, store, reference_catalog=FakeReferenceCatalog())
+        for _ in range(3):
+            window._headphone_box.setCurrentIndex(0)
+            window._on_headphone_selected(0)
+        assert len(window._model.bands) == len(TEST_HEADPHONE.correction)

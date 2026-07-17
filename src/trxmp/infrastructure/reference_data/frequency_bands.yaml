@@ -1,0 +1,48 @@
+# The classic sub-bass -> air vocabulary used across mixing/mastering
+# references (iZotope, Sound On Sound, and most mix-engineering
+# textbooks draw very similar lines, give or take a few hundred Hz at
+# the edges). Not Trxmp's opinion — established terminology, which is
+# exactly why it's safe content to ship without hedging.
+bands:
+  - name: Sub-bass
+    low_hz: 20
+    high_hz: 60
+    description: >-
+      Felt more than heard — rumble and power, but the fastest region to
+      turn a mix to mud if overdone.
+  - name: Bass
+    low_hz: 60
+    high_hz: 250
+    description: >-
+      The fundamental of bass instruments and kick drums. Warmth lives
+      here; too much reads as boomy.
+  - name: Low-mids
+    low_hz: 250
+    high_hz: 500
+    description: >-
+      Body and warmth for most instruments. The classic home of
+      "boxiness" and mix mud.
+  - name: Midrange
+    low_hz: 500
+    high_hz: 2000
+    description: >-
+      Where most instruments' core tonal character lives — vocals,
+      guitars, snares. Careless boosts turn honky fast.
+  - name: Upper-mids
+    low_hz: 2000
+    high_hz: 4000
+    description: >-
+      Clarity and intelligibility. Also where harshness and listening
+      fatigue start if pushed too hard.
+  - name: Presence
+    low_hz: 4000
+    high_hz: 6000
+    description: >-
+      Attack, definition, and sibilance. A little brings vocals
+      forward; a lot turns "s" sounds painful.
+  - name: Air
+    low_hz: 6000
+    high_hz: 20000
+    description: >-
+      Sparkle and openness. Too little sounds dull and covered; too
+      much sounds thin and harsh.

@@ -29,6 +29,7 @@ from trxmp.infrastructure.loopback_capture import LoopbackCapture
 from trxmp.infrastructure.paths import data_dir
 from trxmp.infrastructure.preferences_file import PREFERENCES_FILENAME, JsonPreferencesStore
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
+from trxmp.infrastructure.reference_data.catalog import YamlReferenceCatalog
 from trxmp.infrastructure.windows_audio import PycawDeviceService
 from trxmp.ui.main_window import MainWindow
 
@@ -55,6 +56,7 @@ def main() -> int:
         profile_manager=profile_manager,
         apo_support_check=is_apo_enabled_for_device,
         capture_source=LoopbackCapture(),
+        reference_catalog=YamlReferenceCatalog(),
     )
     window.show()
     return app.exec()

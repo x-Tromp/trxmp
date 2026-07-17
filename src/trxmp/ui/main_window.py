@@ -33,7 +33,9 @@ from trxmp.application.devices import AudioDeviceService, ProfileManager
 from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
 from trxmp.application.preferences import AccentColor, Preferences, PreferencesStore, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
+from trxmp.application.reference import ReferenceCatalog
 from trxmp.domain.devices import AudioDevice
+from trxmp.domain.equalizer import EqPreset
 from trxmp.domain.errors import EqualizerError
 from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.device_controller import DeviceController
@@ -62,6 +64,7 @@ class MainWindow(QMainWindow):
         profile_manager: ProfileManager,
         apo_support_check: ApoSupportCheck | None = None,
         capture_source: AudioCaptureSource | None = None,
+        reference_catalog: ReferenceCatalog | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -72,6 +75,9 @@ class MainWindow(QMainWindow):
         self._model = EqViewModel()
         self._profile_manager = profile_manager
         self._apo_support_check = apo_support_check or (lambda _: None)
+        # Optional, like the capture source: a knowledge base is a real
+        # feature, not a requirement for the EQ underneath it to work.
+        self._reference_catalog = reference_catalog
         self._accent_buttons: dict[AccentColor, QPushButton] = {}
         # Kept so a theme change can re-render the status line in the new
         # palette without asking the backend again (which touches disk).
@@ -88,6 +94,8 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._reload_preset_list()
         self._restore_last_preset()
+        if self._reference_catalog is not None:
+            self._reload_headphone_list()
 
         self._model.bands_changed.connect(self._update_metrics)
         self._model.preamp_changed.connect(self._update_metrics)
@@ -212,6 +220,16 @@ class MainWindow(QMainWindow):
         self._preset_box.setAccessibleName("Preset")
         self._preset_box.activated.connect(self._on_preset_selected)
         row.addWidget(self._preset_box)
+
+        # Only shown when a catalog was actually supplied — a knowledge
+        # base is a real feature, not a requirement for the EQ to work,
+        # the same optionality pattern as the spectrum button.
+        self._headphone_box = QComboBox(self)
+        self._headphone_box.setAccessibleName("Headphone")
+        self._headphone_box.setPlaceholderText("Headphone…")
+        self._headphone_box.setVisible(False)
+        self._headphone_box.activated.connect(self._on_headphone_selected)
+        row.addWidget(self._headphone_box)
 
         save_button = QPushButton("Save as…", self)
         save_button.clicked.connect(self._on_save_preset)
@@ -399,6 +417,39 @@ class MainWindow(QMainWindow):
         if index >= 0:
             self._preset_box.setCurrentIndex(index)
         self._update_preferences(self._preferences.with_last_preset(name.strip()))
+
+    # ── Headphone knowledge base ─────────────────────────────────────
+    def _reload_headphone_list(self) -> None:
+        """Populate the headphone picker and reveal it.
+
+        Called once at startup, guarded by the catalog actually being
+        present — the same "optional equipment" shape as the spectrum
+        button, so a test or a future non-Windows build that has no
+        catalog wired up simply doesn't show this control at all.
+        """
+        assert self._reference_catalog is not None
+        self._headphone_box.clear()
+        self._headphone_box.setCurrentIndex(-1)  # show the placeholder, not headphone 0
+        for headphone in self._reference_catalog.list_headphones():
+            self._headphone_box.addItem(headphone.name, userData=headphone.id)
+        self._headphone_box.setVisible(True)
+
+    def _on_headphone_selected(self, index: int) -> None:
+        """Load a headphone's correction curve as the current preset.
+
+        A deliberate replace, not a merge onto whatever's already on the
+        curve: repeatedly picking headphones (or picking one, tweaking
+        it, then picking another) must not silently accumulate bands
+        from every previous choice. The same one-shot "load a starting
+        point" behaviour the preset picker already has.
+        """
+        if self._reference_catalog is None:
+            return
+        headphone_id = self._headphone_box.itemData(index)
+        headphone = self._reference_catalog.get_headphone(headphone_id)
+        if headphone is None:
+            return
+        self._model.load(EqPreset(bands=headphone.correction))
 
     # ── Backend status ────────────────────────────────────────────────
     def _show_backend_status(self, status: BackendStatus) -> None:

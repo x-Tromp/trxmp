@@ -43,3 +43,13 @@ class PresetImportError(EqualizerError):
     we would have to guess at. "We imported less than you asked for" is a
     warning, not this.
     """
+
+
+class InvalidReferenceDataError(EqualizerError):
+    """A frequency band or headphone entry in the knowledge base is
+    malformed — should only ever fire against Trxmp's own bundled data,
+    which is exactly why it's worth checking rather than assuming."""
+
+
+class HeadphoneNotFoundError(EqualizerError):
+    """No headphone in the catalog matched what was asked for."""
