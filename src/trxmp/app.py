@@ -20,6 +20,8 @@ from PySide6.QtWidgets import QApplication
 from trxmp import __version__
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.infrastructure.database import create_default_engine
+from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
+from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.paths import data_dir
 from trxmp.infrastructure.preferences_file import PREFERENCES_FILENAME, JsonPreferencesStore
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
@@ -34,7 +36,10 @@ def main() -> int:
 
     library = PresetLibrary(SqlitePresetRepository(create_default_engine()))
     preferences_store = JsonPreferencesStore(data_dir() / PREFERENCES_FILENAME)
+    # Detection happens here, not inside the backend: the backend takes an
+    # installation (or None) so it stays testable against a temp folder.
+    backend = EqualizerApoBackend(detect_installation())
 
-    window = MainWindow(library=library, preferences_store=preferences_store)
+    window = MainWindow(library=library, preferences_store=preferences_store, backend=backend)
     window.show()
     return app.exec()

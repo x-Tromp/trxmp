@@ -13,6 +13,10 @@ Usage:
     trxmp-dsp preset export "Sundara v2" sundara.json
     trxmp-dsp preset show "Sundara v2"
     trxmp-dsp preset delete "Sundara v2"
+    trxmp-dsp apo status
+    trxmp-dsp apo apply --preset "Sundara v2"
+    trxmp-dsp apo disable
+    trxmp-dsp apo restore
 """
 
 from __future__ import annotations
@@ -26,12 +30,15 @@ from typing import cast
 
 from pydantic import ValidationError
 
+from trxmp.application.audio_backend import BackendError
 from trxmp.application.audio_files import equalize_wav_file
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.domain.errors import EqualizerError
 from trxmp.dsp.biquad import FilterType
 from trxmp.infrastructure.database import create_default_engine
+from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
+from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.preset_files import PresetDocument, load_preset_file, save_preset_file
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
 
@@ -160,6 +167,43 @@ def _cmd_preset_delete(args: argparse.Namespace) -> int:
     return 0
 
 
+def _backend() -> EqualizerApoBackend:
+    return EqualizerApoBackend(detect_installation())
+
+
+def _cmd_apo_status(args: argparse.Namespace) -> int:
+    installation = detect_installation()
+    status = EqualizerApoBackend(installation).status
+    print(f"state  : {status.state.value}")
+    print(f"detail : {status.detail}")
+    if installation is not None:
+        print(f"install: {installation.install_path}")
+        print(f"config : {installation.config_dir}")
+    return 0
+
+
+def _cmd_apo_apply(args: argparse.Namespace) -> int:
+    preset = _resolve_preset(args.preset, _library())
+    _backend().apply(preset)
+    print(f"applied {args.preset!r} to system audio via Equalizer APO")
+    print(f"auto preamp: {preset.safe_preamp_db(_DISPLAY_SAMPLE_RATE):+.2f} dB")
+    return 0
+
+
+def _cmd_apo_disable(args: argparse.Namespace) -> int:
+    _backend().disable()
+    print("system EQ switched off (Trxmp stays connected)")
+    return 0
+
+
+def _cmd_apo_restore(args: argparse.Namespace) -> int:
+    if _backend().restore_previous_config():
+        print("restored the Equalizer APO config that was in place before Trxmp")
+    else:
+        print("nothing to restore — Trxmp never claimed config.txt")
+    return 0
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trxmp-dsp",
@@ -202,6 +246,24 @@ def _build_parser() -> argparse.ArgumentParser:
     p_delete.add_argument("name")
     p_delete.set_defaults(handler=_cmd_preset_delete)
 
+    apo = commands.add_parser("apo", help="drive system-wide EQ via Equalizer APO")
+    apo_actions = apo.add_subparsers(dest="apo_action", required=True)
+
+    a_status = apo_actions.add_parser("status", help="is Equalizer APO installed and active?")
+    a_status.set_defaults(handler=_cmd_apo_status)
+
+    a_apply = apo_actions.add_parser("apply", help="apply a preset to all system audio")
+    a_apply.add_argument("--preset", default="flat", help="builtin or library preset name")
+    a_apply.set_defaults(handler=_cmd_apo_apply)
+
+    a_disable = apo_actions.add_parser("disable", help="switch the system EQ off")
+    a_disable.set_defaults(handler=_cmd_apo_disable)
+
+    a_restore = apo_actions.add_parser(
+        "restore", help="hand config.txt back to whatever controlled it before Trxmp"
+    )
+    a_restore.set_defaults(handler=_cmd_apo_restore)
+
     return parser
 
 
@@ -214,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValidationError as error:
         print(f"error: the file is not a valid Trxmp preset:\n{error}", file=sys.stderr)
         return 1
-    except (EqualizerError, ValueError) as error:
+    except (EqualizerError, BackendError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 

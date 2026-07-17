@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 import pytest
 from pytestqt.qtbot import QtBot
 
+from trxmp.application.audio_backend import BackendState, BackendStatus
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.equalizer import EqBand, EqPreset
@@ -55,6 +56,28 @@ class FakePreferencesStore:
         self.save_count += 1
 
 
+class FakeBackend:
+    """An audio backend that records instead of touching the system."""
+
+    def __init__(self, state: BackendState = BackendState.READY) -> None:
+        self.applied: list[EqPreset] = []
+        self.state = state
+
+    @property
+    def name(self) -> str:
+        return "Fake"
+
+    @property
+    def status(self) -> BackendStatus:
+        return BackendStatus(self.state, "fake backend detail")
+
+    def apply(self, preset: EqPreset) -> None:
+        self.applied.append(preset)
+
+    def disable(self) -> None:
+        pass
+
+
 @pytest.fixture
 def repository() -> FakeRepository:
     return FakeRepository()
@@ -65,8 +88,13 @@ def store() -> FakePreferencesStore:
     return FakePreferencesStore()
 
 
-def _window(qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore) -> MainWindow:
-    window = MainWindow(PresetLibrary(repository), store)
+def _window(
+    qtbot: QtBot,
+    repository: FakeRepository,
+    store: FakePreferencesStore,
+    backend: FakeBackend | None = None,
+) -> MainWindow:
+    window = MainWindow(PresetLibrary(repository), store, backend or FakeBackend())
     qtbot.addWidget(window)
     return window
 
@@ -192,3 +220,32 @@ def test_reset_returns_to_flat(
     window._model.set_band_gain(0, 8.0)
     window._model.reset()
     assert all(band.gain_db == 0.0 for band in window._model.bands)
+
+
+def test_backend_status_is_shown_on_open(
+    qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+) -> None:
+    window = _window(qtbot, repository, store)
+    assert "fake backend detail" in window._status_label.text()
+
+
+def test_opening_the_window_does_not_touch_system_audio(
+    qtbot: QtBot, repository: FakeRepository
+) -> None:
+    """Restoring the last preset at startup must not seize control of
+    Equalizer APO from whatever is already using it."""
+    repository.upsert("Mine", "", EqPreset(bands=(EqBand(FilterType.PEAKING, 800.0, 2.0, 1.0),)))
+    store = FakePreferencesStore(Preferences(last_preset="Mine"))
+    backend = FakeBackend()
+    _window(qtbot, repository, store, backend)
+    assert backend.applied == []
+
+
+def test_status_line_survives_a_theme_change(
+    qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+) -> None:
+    """Its indicator dot is palette-coloured, so it must be re-rendered
+    rather than left showing the old theme's colour."""
+    window = _window(qtbot, repository, store)
+    window._theme_button.click()
+    assert "fake backend detail" in window._status_label.text()

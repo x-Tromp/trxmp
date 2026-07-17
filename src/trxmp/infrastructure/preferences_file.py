@@ -2,13 +2,8 @@
 
 Two production concerns this file exists to handle:
 
-**Atomic writes.** ``save`` writes to a temporary file, flushes it to
-the physical disk, then ``os.replace``s it over the real one — an
-atomic operation on both Windows and POSIX. The naive
-``path.write_text(...)`` truncates the file *first*, so a power cut or
-a crash mid-write leaves a half-written settings file. The temp+replace
-dance means the file on disk is always either the complete old version
-or the complete new one, never a corpse in between.
+**Atomic writes**, via :func:`~trxmp.infrastructure.atomic_write.write_text_atomic`
+— a settings file must never survive a crash half-written.
 
 **Tolerant loads.** ``load`` never raises. A settings file that's
 missing, unreadable, corrupt, or written by a future version falls back
@@ -19,13 +14,12 @@ file got truncated would be an absurd failure mode.
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
+from trxmp.infrastructure.atomic_write import write_text_atomic
 
 PREFERENCES_FILENAME = "preferences.json"
 
@@ -68,19 +62,4 @@ class JsonPreferencesStore:
             last_preset=preferences.last_preset,
         )
         payload = json.dumps(document.model_dump(mode="json"), indent=2) + "\n"
-
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        # Same directory as the target: os.replace is only atomic within
-        # a single filesystem, and %TEMP% may well be on another drive.
-        descriptor, temporary_path = tempfile.mkstemp(
-            dir=self._path.parent, prefix=self._path.name, suffix=".tmp"
-        )
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-                file.write(payload)
-                file.flush()
-                os.fsync(file.fileno())  # force to the platter before swapping
-            os.replace(temporary_path, self._path)
-        except OSError:
-            Path(temporary_path).unlink(missing_ok=True)
-            raise
+        write_text_atomic(self._path, payload)

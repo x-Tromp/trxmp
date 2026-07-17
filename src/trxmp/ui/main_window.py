@@ -23,10 +23,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trxmp.application.audio_backend import AudioBackend, BackendState, BackendStatus
 from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
 from trxmp.application.preferences import AccentColor, Preferences, PreferencesStore, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.domain.errors import EqualizerError
+from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, Theme
 from trxmp.ui.view_models import EqViewModel
 from trxmp.ui.widgets.band_controls import BandControls
@@ -40,6 +42,7 @@ class MainWindow(QMainWindow):
         self,
         library: PresetLibrary,
         preferences_store: PreferencesStore,
+        backend: AudioBackend,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -49,6 +52,9 @@ class MainWindow(QMainWindow):
         self._theme = Theme(self._preferences.theme_mode, self._preferences.accent)
         self._model = EqViewModel()
         self._accent_buttons: dict[AccentColor, QPushButton] = {}
+        # Kept so a theme change can re-render the status line in the new
+        # palette without asking the backend again (which touches disk).
+        self._backend_status = BackendStatus(BackendState.READY, "")
 
         self.setWindowTitle("Trxmp")
         self.resize(1000, 700)
@@ -63,6 +69,14 @@ class MainWindow(QMainWindow):
         self._model.preamp_changed.connect(self._update_metrics)
         self._model.powered_changed.connect(self._update_metrics)
         self._update_metrics()
+
+        # Wired last, and started explicitly: restoring the last preset
+        # above emits signals, and none of them should push audio out to
+        # the system before the user has touched anything.
+        self._backend_controller = BackendController(self._model, backend, parent=self)
+        self._backend_controller.status_changed.connect(self._show_backend_status)
+        self._show_backend_status(self._backend_controller.status)
+        self._backend_controller.start()
 
     # ── Construction ──────────────────────────────────────────────────
     def _build_ui(self) -> None:
@@ -83,6 +97,11 @@ class MainWindow(QMainWindow):
         brand = QLabel("Trxmp", self)
         brand.setObjectName("brand")
         header.addWidget(brand)
+        header.addSpacing(SPACE_MD)
+
+        self._status_label = QLabel(self)
+        self._status_label.setObjectName("caption")
+        header.addWidget(self._status_label)
         header.addSpacing(SPACE_MD)
 
         self._preset_box = QComboBox(self)
@@ -165,6 +184,7 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(self._theme.stylesheet())
         self._curve.set_palette(self._theme.palette)
         self._theme_button.setText("Light" if self._theme.mode is ThemeMode.DARK else "Dark")
+        self._show_backend_status(self._backend_status)  # its dot is palette-coloured
         # Swatches are painted directly, not themed by the stylesheet:
         # each shows the accent it selects, in the *current* mode's
         # variant, so what you see is exactly what you'd get.
@@ -234,6 +254,25 @@ class MainWindow(QMainWindow):
         if index >= 0:
             self._preset_box.setCurrentIndex(index)
         self._update_preferences(self._preferences.with_last_preset(name.strip()))
+
+    # ── Backend status ────────────────────────────────────────────────
+    def _show_backend_status(self, status: BackendStatus) -> None:
+        """One line telling the truth about where the audio actually is.
+
+        A system-wide EQ that silently isn't running is worse than no EQ
+        at all: the user turns knobs, hears nothing change, and blames
+        their ears. The dot's colour carries the state at a glance and
+        the text carries what to do about it.
+        """
+        self._backend_status = status
+        dot = {
+            BackendState.ACTIVE: self._theme.palette.accent,
+            BackendState.READY: self._theme.palette.text_secondary,
+            BackendState.UNAVAILABLE: self._theme.palette.text_tertiary,
+            BackendState.ERROR: "#ff453a",
+        }[status.state]
+        self._status_label.setText(f'<span style="color:{dot}">●</span> {status.detail}')
+        self._status_label.setToolTip(status.detail)
 
     # ── Power & metrics ───────────────────────────────────────────────
     def _on_power_toggled(self, checked: bool) -> None:

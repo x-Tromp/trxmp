@@ -59,6 +59,23 @@ uv run mypy                  # strict type checking
 
 All four quality gates must pass before every commit.
 
+### System-wide EQ
+
+Trxmp drives [Equalizer APO](https://sourceforge.net/projects/equalizerapo/)
+to equalize everything Windows plays, with no added latency.
+
+```powershell
+uv run trxmp-dsp apo status                      # installed? who controls audio?
+uv run trxmp-dsp apo apply --preset "Sundara"    # equalize all system audio
+uv run trxmp-dsp apo disable                     # bypass, stay connected
+uv run trxmp-dsp apo restore                     # hand config.txt back
+```
+
+Equalizer APO reads one entry point, `config.txt`, and other tools (Peace,
+for one) claim it too. Trxmp keeps its filters in its own `trxmp.txt`,
+backs up `config.txt` exactly once before claiming it, never writes
+another tool's files, and can hand everything back with `apo restore`.
+
 ### Preset library
 
 Presets live in a SQLite database under `%LOCALAPPDATA%\Equix\Trxmp`
@@ -78,7 +95,7 @@ uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
 - [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run trxmp-dsp process in.wav out.wav --preset smoke-test`)
 - [x] **M2 — Domain & persistence**: `StoredPreset` entity, `PresetRepository` Protocol + SQLite/SQLAlchemy adapter, Pydantic-at-the-boundary JSON/YAML/CSV import-export, `trxmp-dsp preset` subcommands
 - [x] **M3 — UI shell**: token-based theme engine (dark/light × 6 accents, persisted), interactive EQ curve (drag = gain + frequency, wheel = Q, double-click = flatten), band controls, preset picker, live gain-staging readout
-- [ ] **M4 — Equalizer APO backend**: detect install, write configs, live system-wide EQ
+- [x] **M4 — Equalizer APO backend**: `AudioBackend` Strategy interface, install detection, APO config rendering, live debounced apply, backup/restore of an existing controller's config
 - [ ] **M5 — Devices & profiles**: WASAPI device detection, auto profile switching
 - [ ] **M6 — Preset ecosystem**: AutoEQ / EQ APO / Peace import, headphone catalog
 - [ ] **M7 — Spectrum analyzer**: read-only WASAPI loopback + real-time FFT view
