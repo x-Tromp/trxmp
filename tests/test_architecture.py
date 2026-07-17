@@ -18,6 +18,7 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
         "PySide6",
         "scipy",
         "sqlalchemy",
+        "pydantic",  # Pydantic lives at the file boundary, never in the domain
         "trxmp.application",
         "trxmp.infrastructure",
         "trxmp.ui",
@@ -25,12 +26,16 @@ FORBIDDEN: dict[str, tuple[str, ...]] = {
     "trxmp.dsp": (
         "PySide6",
         "sqlalchemy",
+        "pydantic",
         "trxmp.domain",
         "trxmp.application",
         "trxmp.infrastructure",
         "trxmp.ui",
     ),
-    "trxmp.application": ("PySide6", "trxmp.ui"),
+    # The application layer stays persistence- and serialization-agnostic:
+    # it declares Protocols (e.g. PresetRepository) that infrastructure
+    # implements, so it must not import sqlalchemy, pydantic, or the UI.
+    "trxmp.application": ("PySide6", "sqlalchemy", "pydantic", "trxmp.ui"),
     "trxmp.infrastructure": ("PySide6", "trxmp.ui"),
     "trxmp.ui": ("scipy", "trxmp.infrastructure"),
 }

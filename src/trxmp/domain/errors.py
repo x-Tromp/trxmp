@@ -17,3 +17,11 @@ class InvalidBandError(EqualizerError):
 
 class InvalidPresetError(EqualizerError):
     """A preset-level rule (band count, preamp range) was violated."""
+
+
+class PresetNotFoundError(EqualizerError):
+    """No preset with the requested name exists in the library."""
+
+
+class DuplicatePresetError(EqualizerError):
+    """A preset with this name already exists and overwrite wasn't requested."""

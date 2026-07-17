@@ -1,14 +1,18 @@
 [project]
 name = "trxmp"
-version = "0.2.0"
+version = "0.3.0"
 description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "Equix", email = "equixete@gmail.com" }]
 dependencies = [
     "numpy>=2.1",
+    "platformdirs>=4.2",
+    "pydantic>=2.9",
     "pyside6>=6.9",
+    "pyyaml>=6.0",
     "scipy>=1.14",
+    "sqlalchemy>=2.0.36",
 ]
 
 [dependency-groups]
@@ -16,6 +20,7 @@ dev = [
     "mypy>=1.14",
     "pytest>=8.3",
     "ruff>=0.9",
+    "types-pyyaml>=6.0",
 ]
 
 # gui-scripts (not scripts) so the installed launcher opens no console

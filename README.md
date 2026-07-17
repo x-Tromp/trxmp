@@ -42,7 +42,8 @@ Requires Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/).
 
 ```powershell
 uv sync                      # create venv + install everything
-uv run python -m trxmp    # launch the app
+uv run python -m trxmp       # launch the app
+uv run trxmp-dsp --help      # offline DSP + preset library CLI
 uv run pytest                # tests
 uv run ruff check            # lint
 uv run ruff format --check   # formatting
@@ -51,11 +52,24 @@ uv run mypy                  # strict type checking
 
 All four quality gates must pass before every commit.
 
+### Preset library
+
+Presets live in a SQLite database under `%LOCALAPPDATA%\Equix\Trxmp`
+and interchange as `.json` / `.yaml` / `.csv`:
+
+```powershell
+uv run trxmp-dsp preset import sundara.yaml   # import a shared preset
+uv run trxmp-dsp preset list                  # what's in the library
+uv run trxmp-dsp preset show "Sundara"        # inspect one preset
+uv run trxmp-dsp preset export "Sundara" out.json
+uv run trxmp-dsp process in.wav out.wav --preset "Sundara"
+```
+
 ## Roadmap
 
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
-- [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run trxmp-dsp in.wav out.wav --preset smoke-test`)
-- [ ] **M2 — Domain & persistence**: Pydantic models, SQLite + SQLAlchemy, JSON/YAML/CSV import-export
+- [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run trxmp-dsp process in.wav out.wav --preset smoke-test`)
+- [x] **M2 — Domain & persistence**: `StoredPreset` entity, `PresetRepository` Protocol + SQLite/SQLAlchemy adapter, Pydantic-at-the-boundary JSON/YAML/CSV import-export, `trxmp-dsp preset` subcommands
 - [ ] **M3 — UI shell**: theme engine (dark/light/accent), interactive EQ curve, band controls
 - [ ] **M4 — Equalizer APO backend**: detect install, write configs, live system-wide EQ
 - [ ] **M5 — Devices & profiles**: WASAPI device detection, auto profile switching
