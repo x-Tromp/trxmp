@@ -32,9 +32,9 @@ SPACE_MD = 12
 SPACE_LG = 16
 SPACE_XL = 24
 
-RADIUS_SM = 6
+RADIUS_SM = 8
 RADIUS_MD = 10
-RADIUS_LG = 14
+RADIUS_LG = 18
 
 # Segoe UI Variable is Windows 11's system font (the closest thing to SF
 # Pro on this platform); the rest of the stack keeps the app sane on
@@ -146,6 +146,22 @@ class Theme:
     def palette(self) -> Palette:
         return build_palette(self.mode, self.accent)
 
+    @property
+    def shadow(self) -> tuple[str, int]:
+        """A neutral drop-shadow colour and alpha (0-255).
+
+        Deliberately not a :class:`Palette` field: shadows don't vary by
+        accent — a pink shadow would read as a rendering bug, not a
+        design choice — only by mode, and asymmetrically so. Light
+        surfaces have room for a shadow to read as depth; this app's
+        near-black dark background does not — a black shadow against a
+        background that's already almost black has nowhere to go
+        darker. Dark mode leans on the surface/border colour step-up
+        for elevation instead, which is the same choice macOS itself
+        makes: shadows matter far more in light appearance.
+        """
+        return ("#000000", 110 if self.mode is ThemeMode.DARK else 60)
+
     def stylesheet(self) -> str:
         return build_stylesheet(self.palette)
 
@@ -205,7 +221,7 @@ def build_stylesheet(palette: Palette) -> str:
         color: {p.text_primary};
         border: 1px solid {p.border};
         border-radius: {RADIUS_SM}px;
-        padding: {SPACE_XS}px {SPACE_MD}px;
+        padding: {SPACE_SM}px {SPACE_LG}px;
     }}
     QPushButton:hover {{ background-color: {p.surface_hover}; }}
     QPushButton:pressed {{ border-color: {p.border_strong}; }}
@@ -214,25 +230,34 @@ def build_stylesheet(palette: Palette) -> str:
         background-color: {p.accent};
         color: {p.accent_contrast};
         border: none;
+        border-radius: 17px;
         font-weight: 600;
+        padding: {SPACE_SM}px {SPACE_XL}px;
     }}
     QPushButton#primary:hover {{ background-color: {p.accent_hover}; }}
     QPushButton#ghost {{
         background: transparent;
-        border: none;
+        border: 1px solid transparent;
         color: {p.text_secondary};
     }}
-    QPushButton#ghost:hover {{ color: {p.text_primary}; }}
+    QPushButton#ghost:hover {{
+        color: {p.text_primary};
+        background-color: {p.surface_hover};
+    }}
+    QPushButton#ghost:checked {{
+        color: {p.accent};
+        border-color: {p.accent};
+    }}
 
     QComboBox {{
         background-color: {p.surface_elevated};
         border: 1px solid {p.border};
         border-radius: {RADIUS_SM}px;
-        padding: {SPACE_XS}px {SPACE_SM}px;
+        padding: {SPACE_SM}px {SPACE_MD}px;
         min-width: 180px;
     }}
     QComboBox:hover {{ border-color: {p.border_strong}; }}
-    QComboBox::drop-down {{ border: none; width: 20px; }}
+    QComboBox::drop-down {{ border: none; width: 24px; }}
     QComboBox QAbstractItemView {{
         background-color: {p.surface_elevated};
         border: 1px solid {p.border};
@@ -251,10 +276,10 @@ def build_stylesheet(palette: Palette) -> str:
     QSlider::handle:vertical {{
         background: {p.text_primary};
         border: none;
-        height: 14px;
-        width: 14px;
-        margin: 0 -5px;
-        border-radius: 7px;
+        height: 16px;
+        width: 16px;
+        margin: 0 -6px;
+        border-radius: 8px;
     }}
     QSlider::handle:vertical:hover {{ background: {p.accent}; }}
     QSlider::handle:vertical:disabled {{ background: {p.text_tertiary}; }}

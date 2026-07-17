@@ -12,9 +12,11 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -36,12 +38,14 @@ from trxmp.domain.errors import EqualizerError
 from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.device_controller import DeviceController
 from trxmp.ui.spectrum_controller import SpectrumController
-from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, Theme
+from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, SPACE_XL, SPACE_XS, Theme
 from trxmp.ui.view_models import EqViewModel
 from trxmp.ui.widgets.band_controls import BandControls
+from trxmp.ui.widgets.eliding_label import ElidingLabel
 from trxmp.ui.widgets.eq_curve import EqCurveWidget
+from trxmp.ui.widgets.status_dot import StatusDot
 
-_ACCENT_SWATCH_SIZE = 14
+_ACCENT_SWATCH_SIZE = 16
 
 # Answers "will the EQ actually reach this device?"; injected because it
 # reads the Windows registry, which the UI layer must not know about.
@@ -72,6 +76,9 @@ class MainWindow(QMainWindow):
         # Kept so a theme change can re-render the status line in the new
         # palette without asking the backend again (which touches disk).
         self._backend_status = BackendStatus(BackendState.READY, "")
+        # Populated by _wrap_in_card; refreshed on every theme change
+        # since light and dark need very different shadow strengths.
+        self._card_shadows: list[QGraphicsDropShadowEffect] = []
 
         self.setWindowTitle("Trxmp")
         self.resize(1000, 700)
@@ -114,78 +121,146 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         central = QWidget(self)
         root = QVBoxLayout(central)
-        root.setContentsMargins(SPACE_LG, SPACE_LG, SPACE_LG, SPACE_LG)
-        root.setSpacing(SPACE_MD)
+        # Generous outer margins are most of what makes a window feel
+        # designed rather than filled to the edges — the single biggest
+        # lever for an "airy" look, and the cheapest to pull.
+        root.setContentsMargins(SPACE_XL, SPACE_XL, SPACE_XL, SPACE_XL)
+        root.setSpacing(SPACE_LG)
 
         root.addLayout(self._build_header())
         root.addWidget(self._wrap_in_card(self._build_curve_section()), stretch=1)
         root.addWidget(self._wrap_in_card(BandControls(self._model, self)))
         self.setCentralWidget(central)
 
-    def _build_header(self) -> QHBoxLayout:
-        header = QHBoxLayout()
+    def _build_header(self) -> QVBoxLayout:
+        """Two rows, not one.
+
+        The original single-row header was the source of a real bug: nine
+        interactive elements and a status line competed for one strip of
+        window width, and on a normal-sized window the device line simply
+        ran out of room and got clipped mid-word. Splitting brand+status
+        from preset+appearance controls isn't just prettier — it's what
+        gives the status column enough width that eliding becomes the
+        rare fallback instead of the everyday reality.
+        """
+        header = QVBoxLayout()
         header.setSpacing(SPACE_SM)
+        header.addLayout(self._build_header_status_row())
+        header.addLayout(self._build_header_controls_row())
+        return header
+
+    def _build_header_status_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(SPACE_MD)
 
         brand = QLabel("Trxmp", self)
         brand.setObjectName("brand")
-        header.addWidget(brand)
-        header.addSpacing(SPACE_MD)
+        row.addWidget(brand)
+
+        # A layout added with a stretch factor grows its *box*, but
+        # left-aligned content inside that box stays put at the box's
+        # left edge — it does not migrate toward the box's right edge.
+        # To pin the status column against the window's right margin,
+        # the stretch has to be the empty space *before* it, not a
+        # stretch factor on the column itself. (First attempt at this
+        # got it backwards and the status dot ended up floating in the
+        # middle of the header — this comment is here so that mistake
+        # doesn't get quietly reintroduced.)
+        row.addStretch(1)
 
         status_column = QVBoxLayout()
-        status_column.setSpacing(2)
-        self._status_label = QLabel(self)
+        status_column.setSpacing(3)
+
+        # The dot needs to sit immediately next to the status text, not
+        # merely somewhere on the same row — and a bare QHBoxLayout added
+        # to status_column would stretch to the column's full width
+        # (which the longer device line below dictates), leaving the dot
+        # stranded at the far left of that width with the right-aligned
+        # text nowhere near it. Wrapping the pair in its own QWidget and
+        # adding *that* with an alignment lets it keep its natural,
+        # compact size and sit as one right-aligned unit instead.
+        status_line_widget = QWidget(self)
+        status_line = QHBoxLayout(status_line_widget)
+        status_line.setContentsMargins(0, 0, 0, 0)
+        status_line.setSpacing(SPACE_XS)
+        self._status_dot = StatusDot(self)
+        self._status_label = ElidingLabel(self)
         self._status_label.setObjectName("caption")
-        self._device_label = QLabel(self)
+        self._status_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        status_line.addWidget(self._status_dot, alignment=Qt.AlignmentFlag.AlignVCenter)
+        status_line.addWidget(self._status_label)
+        status_column.addWidget(status_line_widget, alignment=Qt.AlignmentFlag.AlignRight)
+
+        self._device_label = ElidingLabel(self)
         self._device_label.setObjectName("caption")
-        status_column.addWidget(self._status_label)
+        self._device_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         status_column.addWidget(self._device_label)
-        header.addLayout(status_column)
-        header.addSpacing(SPACE_MD)
+
+        # This column used to share a row with every button in the
+        # header; on its own row, flush against the margin, it gets
+        # most of the window's width — which is what actually fixes the
+        # truncation. ElidingLabel is only the safety net for whatever
+        # is left over on a genuinely narrow window.
+        row.addLayout(status_column)
+        return row
+
+    def _build_header_controls_row(self) -> QHBoxLayout:
+        row = QHBoxLayout()
+        row.setSpacing(SPACE_SM)
 
         self._preset_box = QComboBox(self)
         self._preset_box.setAccessibleName("Preset")
         self._preset_box.activated.connect(self._on_preset_selected)
-        header.addWidget(self._preset_box)
+        row.addWidget(self._preset_box)
 
         save_button = QPushButton("Save as…", self)
         save_button.clicked.connect(self._on_save_preset)
-        header.addWidget(save_button)
+        row.addWidget(save_button)
 
         reset_button = QPushButton("Reset", self)
         reset_button.setObjectName("ghost")
         reset_button.clicked.connect(self._model.reset)
-        header.addWidget(reset_button)
+        row.addWidget(reset_button)
 
         self._link_button = QPushButton("Link to device", self)
         self._link_button.clicked.connect(self._on_link_clicked)
-        header.addWidget(self._link_button)
+        row.addWidget(self._link_button)
 
-        header.addStretch(1)
+        row.addStretch(1)
 
+        # Tight spacing within the swatch group, loose spacing around
+        # it: that contrast is what reads as "these six belong together"
+        # without drawing a box around them.
+        swatches = QHBoxLayout()
+        swatches.setSpacing(SPACE_XS)
         for accent in AccentColor:
-            header.addWidget(self._build_accent_swatch(accent))
-        header.addSpacing(SPACE_SM)
+            swatches.addWidget(self._build_accent_swatch(accent))
+        row.addLayout(swatches)
+        row.addSpacing(SPACE_MD)
 
         self._spectrum_button = QPushButton("Spectrum", self)
         self._spectrum_button.setObjectName("ghost")
         self._spectrum_button.setCheckable(True)
         self._spectrum_button.setVisible(False)  # shown when a capture source exists
         self._spectrum_button.toggled.connect(self._on_spectrum_toggled)
-        header.addWidget(self._spectrum_button)
+        row.addWidget(self._spectrum_button)
 
         self._theme_button = QPushButton(self)
         self._theme_button.setObjectName("ghost")
         self._theme_button.setFixedWidth(64)
         self._theme_button.clicked.connect(self._on_toggle_theme)
-        header.addWidget(self._theme_button)
+        row.addWidget(self._theme_button)
+
+        row.addSpacing(SPACE_SM)
 
         self._power_button = QPushButton("EQ ON", self)
         self._power_button.setObjectName("primary")
         self._power_button.setCheckable(True)
         self._power_button.setChecked(True)
+        self._power_button.setFixedWidth(92)
         self._power_button.toggled.connect(self._on_power_toggled)
-        header.addWidget(self._power_button)
-        return header
+        row.addWidget(self._power_button)
+        return row
 
     def _build_accent_swatch(self, accent: AccentColor) -> QPushButton:
         button = QPushButton(self)
@@ -226,7 +301,27 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(card)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(content)
+
+        # A soft, low drop shadow instead of a harder border is most of
+        # what makes a flat-coloured panel read as a card "resting" on
+        # the window rather than a rectangle painted onto it — the same
+        # trick macOS uses for its own panels. QSS has no box-shadow
+        # property, so this is a real QGraphicsEffect, not a stylesheet
+        # rule; _refresh_card_shadows keeps its strength correct across
+        # theme changes.
+        effect = QGraphicsDropShadowEffect(card)
+        effect.setBlurRadius(28)
+        effect.setOffset(0, 8)
+        card.setGraphicsEffect(effect)
+        self._card_shadows.append(effect)
         return card
+
+    def _refresh_card_shadows(self) -> None:
+        color_hex, alpha = self._theme.shadow
+        color = QColor(color_hex)
+        color.setAlpha(alpha)
+        for effect in self._card_shadows:
+            effect.setColor(color)
 
     # ── Theme ─────────────────────────────────────────────────────────
     def _apply_theme(self) -> None:
@@ -234,6 +329,7 @@ class MainWindow(QMainWindow):
         self._curve.set_palette(self._theme.palette)
         self._theme_button.setText("Light" if self._theme.mode is ThemeMode.DARK else "Dark")
         self._show_backend_status(self._backend_status)  # its dot is palette-coloured
+        self._refresh_card_shadows()
         # Swatches are painted directly, not themed by the stylesheet:
         # each shows the accent it selects, in the *current* mode's
         # variant, so what you see is exactly what you'd get.
@@ -314,13 +410,14 @@ class MainWindow(QMainWindow):
         the text carries what to do about it.
         """
         self._backend_status = status
-        dot = {
+        dot_color = {
             BackendState.ACTIVE: self._theme.palette.accent,
             BackendState.READY: self._theme.palette.text_secondary,
             BackendState.UNAVAILABLE: self._theme.palette.text_tertiary,
             BackendState.ERROR: "#ff453a",
         }[status.state]
-        self._status_label.setText(f'<span style="color:{dot}">●</span> {status.detail}')
+        self._status_dot.set_color(dot_color)
+        self._status_label.setText(status.detail)
         self._status_label.setToolTip(status.detail)
 
     # ── Spectrum analyzer ─────────────────────────────────────────────

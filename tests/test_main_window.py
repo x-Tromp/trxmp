@@ -218,6 +218,25 @@ def test_status_line_survives_a_theme_change(
     assert "fake backend detail" in window._status_label.text()
 
 
+def test_status_dot_sits_next_to_its_text_not_stranded_across_the_header(
+    qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+) -> None:
+    """Regression test for a real layout bug found while polishing this
+    header: an earlier version gave the status column a stretch factor
+    *and* stretched empty space before it, so the column's box grew wide
+    but its dot — left-aligned within that now-wide box — ended up
+    floating near the middle of the window while the right-aligned text
+    sat far away from it at the window's edge. A layout bug like that
+    has no exception to catch; only geometry reveals it.
+    """
+    window = _window(qtbot, repository, store)
+    window.show()
+    qtbot.waitExposed(window)
+
+    gap = window._status_label.x() - window._status_dot.geometry().right()
+    assert 0 <= gap < 20, f"dot and status text are {gap}px apart — they should be adjacent"
+
+
 class TestDeviceProfiles:
     def test_current_output_device_is_shown(
         self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
