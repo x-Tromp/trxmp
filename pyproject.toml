@@ -1,0 +1,56 @@
+[project]
+name = "eqgenius"
+version = "0.1.0"
+description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "Equix", email = "equixete@gmail.com" }]
+dependencies = [
+    "numpy>=2.1",
+    "pyside6>=6.9",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+
+# gui-scripts (not scripts) so the installed launcher opens no console
+# window on Windows. During development use `uv run python -m eqgenius`,
+# which keeps the console attached so you can see logs and tracebacks.
+[project.gui-scripts]
+eqgenius = "eqgenius.app:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/eqgenius"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", # pycodestyle: PEP 8 style errors/warnings
+    "F",      # pyflakes: real bugs (unused imports, undefined names)
+    "I",      # isort: deterministic import ordering
+    "N",      # pep8-naming
+    "UP",     # pyupgrade: keeps syntax modern for our Python version
+    "B",      # bugbear: likely-bug patterns (mutable default args, etc.)
+    "SIM",    # simplify: flags needlessly complex code
+    "C4",     # comprehensions: idiomatic collection building
+    "RUF",    # ruff's own correctness rules
+]
+
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
