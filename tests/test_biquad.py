@@ -10,7 +10,7 @@ the internals change.
 import numpy as np
 import pytest
 
-from eqgenius.dsp.biquad import FilterType, design, magnitude_response_db
+from trxmp.dsp.biquad import FilterType, design, magnitude_response_db
 
 SAMPLE_RATE = 48_000.0
 

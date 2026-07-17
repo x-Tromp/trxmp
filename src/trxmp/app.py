@@ -11,13 +11,13 @@ import sys
 
 from PySide6.QtWidgets import QApplication
 
-from eqgenius import __version__
-from eqgenius.ui.main_window import MainWindow
+from trxmp import __version__
+from trxmp.ui.main_window import MainWindow
 
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("EQ Genius")
+    app.setApplicationName("Trxmp")
     app.setApplicationVersion(__version__)
     app.setOrganizationName("Equix")
 

@@ -2,14 +2,14 @@
 
 import pytest
 
-from eqgenius.domain.equalizer import (
+from trxmp.domain.equalizer import (
     HEADROOM_SAFETY_MARGIN_DB,
     MAX_BANDS,
     EqBand,
     EqPreset,
 )
-from eqgenius.domain.errors import InvalidBandError, InvalidPresetError
-from eqgenius.dsp.biquad import FilterType
+from trxmp.domain.errors import InvalidBandError, InvalidPresetError
+from trxmp.dsp.biquad import FilterType
 
 SAMPLE_RATE = 48_000.0
 

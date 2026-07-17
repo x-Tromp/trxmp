@@ -1,4 +1,4 @@
-# EQ Genius
+# Trxmp
 
 A system-wide parametric equalizer and headphone manager for Windows,
 built in Python with an Apple-inspired UI.
@@ -10,7 +10,7 @@ built in Python with an Apple-inspired UI.
 ## Audio architecture
 
 Windows only allows zero-latency system-wide audio processing inside its
-audio engine (APO drivers, written in C/C++). EQ Genius therefore ships
+audio engine (APO drivers, written in C/C++). Trxmp therefore ships
 **two interchangeable audio backends** behind one `AudioBackend`
 interface (Strategy pattern):
 
@@ -19,13 +19,13 @@ Daily driver (0 ms added):          Lab mode (learning/portfolio):
 Apps → Windows Audio Engine         Apps → virtual device (VB-Cable)
         └─ Equalizer APO                    └─ Python DSP pipeline
            ▲ configs written by                (NumPy biquads, ~50 ms)
-           EQ Genius
+           Trxmp
 ```
 
 ## Layers
 
 ```
-src/eqgenius/
+src/trxmp/
 ├── domain/          # business models & rules — pure Python, no I/O
 ├── dsp/             # filter math & analysis — NumPy only, stateless
 ├── application/     # use cases — orchestrates domain ↔ infrastructure
@@ -42,7 +42,7 @@ Requires Python ≥ 3.13 and [uv](https://docs.astral.sh/uv/).
 
 ```powershell
 uv sync                      # create venv + install everything
-uv run python -m eqgenius    # launch the app
+uv run python -m trxmp    # launch the app
 uv run pytest                # tests
 uv run ruff check            # lint
 uv run ruff format --check   # formatting
@@ -54,7 +54,7 @@ All four quality gates must pass before every commit.
 ## Roadmap
 
 - [x] **M0 — Foundations**: tooling, layered skeleton, first DSP slice, minimal window
-- [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run eqgenius-dsp in.wav out.wav --preset smoke-test`)
+- [x] **M1 — DSP engine**: full RBJ filter set, cascade response, headroom analysis, limiter, offline WAV processing (`uv run trxmp-dsp in.wav out.wav --preset smoke-test`)
 - [ ] **M2 — Domain & persistence**: Pydantic models, SQLite + SQLAlchemy, JSON/YAML/CSV import-export
 - [ ] **M3 — UI shell**: theme engine (dark/light/accent), interactive EQ curve, band controls
 - [ ] **M4 — Equalizer APO backend**: detect install, write configs, live system-wide EQ

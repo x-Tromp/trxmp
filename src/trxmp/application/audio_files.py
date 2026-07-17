@@ -17,10 +17,10 @@ from pathlib import Path
 
 import numpy as np
 
-from eqgenius.domain.equalizer import EqPreset
-from eqgenius.dsp.biquad import design
-from eqgenius.dsp.engine import EqEngine
-from eqgenius.infrastructure.wav_io import load_wav, save_wav
+from trxmp.domain.equalizer import EqPreset
+from trxmp.dsp.biquad import design
+from trxmp.dsp.engine import EqEngine
+from trxmp.infrastructure.wav_io import load_wav, save_wav
 
 _BLOCK_FRAMES = 4096
 

@@ -11,7 +11,7 @@ Two kinds of code live here, with different contracts:
 
 Rules for this package:
 - Depends only on NumPy/SciPy. No Qt, no I/O, no imports from other
-  ``eqgenius`` layers — the engine consumes plain coefficients, not
+  ``trxmp`` layers — the engine consumes plain coefficients, not
   domain objects, which is what keeps this layer reusable and the
   dependency arrows pointing the right way.
 """

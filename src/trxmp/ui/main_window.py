@@ -9,13 +9,13 @@ a skeleton.
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMainWindow, QVBoxLayout, QWidget
 
-from eqgenius import __version__
+from trxmp import __version__
 
 
 class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("EQ Genius")
+        self.setWindowTitle("Trxmp")
         self.resize(960, 640)
         self.setMinimumSize(720, 480)
 
@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
 
-        title = QLabel("EQ Genius", central)
+        title = QLabel("Trxmp", central)
         title.setObjectName("title")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from eqgenius.dsp.limiter import Limiter
+from trxmp.dsp.limiter import Limiter
 
 SAMPLE_RATE = 48_000.0
 

@@ -10,34 +10,34 @@ Qt, or the UI reaching straight into infrastructure.
 import ast
 from pathlib import Path
 
-SRC = Path(__file__).parent.parent / "src" / "eqgenius"
+SRC = Path(__file__).parent.parent / "src" / "trxmp"
 
 # layer package -> import prefixes it must never touch.
 FORBIDDEN: dict[str, tuple[str, ...]] = {
-    "eqgenius.domain": (
+    "trxmp.domain": (
         "PySide6",
         "scipy",
         "sqlalchemy",
-        "eqgenius.application",
-        "eqgenius.infrastructure",
-        "eqgenius.ui",
+        "trxmp.application",
+        "trxmp.infrastructure",
+        "trxmp.ui",
     ),
-    "eqgenius.dsp": (
+    "trxmp.dsp": (
         "PySide6",
         "sqlalchemy",
-        "eqgenius.domain",
-        "eqgenius.application",
-        "eqgenius.infrastructure",
-        "eqgenius.ui",
+        "trxmp.domain",
+        "trxmp.application",
+        "trxmp.infrastructure",
+        "trxmp.ui",
     ),
-    "eqgenius.application": ("PySide6", "eqgenius.ui"),
-    "eqgenius.infrastructure": ("PySide6", "eqgenius.ui"),
-    "eqgenius.ui": ("scipy", "eqgenius.infrastructure"),
+    "trxmp.application": ("PySide6", "trxmp.ui"),
+    "trxmp.infrastructure": ("PySide6", "trxmp.ui"),
+    "trxmp.ui": ("scipy", "trxmp.infrastructure"),
 }
 
 
 def _module_name(path: Path) -> str:
-    relative = path.relative_to(SRC.parent)  # e.g. eqgenius/dsp/engine.py
+    relative = path.relative_to(SRC.parent)  # e.g. trxmp/dsp/engine.py
     parts = relative.with_suffix("").parts
     if parts[-1] == "__init__":
         parts = parts[:-1]

@@ -1,6 +1,6 @@
 [project]
-name = "eqgenius"
-version = "0.1.0"
+name = "trxmp"
+version = "0.2.0"
 description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -19,22 +19,22 @@ dev = [
 ]
 
 # gui-scripts (not scripts) so the installed launcher opens no console
-# window on Windows. During development use `uv run python -m eqgenius`,
+# window on Windows. During development use `uv run python -m trxmp`,
 # which keeps the console attached so you can see logs and tracebacks.
 [project.gui-scripts]
-eqgenius = "eqgenius.app:main"
+trxmp = "trxmp.app:main"
 
 # The offline processor is a real CLI, so it *wants* a console attached —
 # note the deliberate contrast with the GUI entry point above.
 [project.scripts]
-eqgenius-dsp = "eqgenius.cli:main"
+trxmp-dsp = "trxmp.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/eqgenius"]
+packages = ["src/trxmp"]
 
 [tool.ruff]
 line-length = 100

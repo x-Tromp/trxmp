@@ -6,7 +6,7 @@ arguments, pick a preset, call the application layer, print the report.
 If logic ever accumulates here, it's in the wrong place.
 
 Usage:
-    uv run eqgenius-dsp input.wav output.wav --preset smoke-test
+    uv run trxmp-dsp input.wav output.wav --preset smoke-test
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ import sys
 import time
 from pathlib import Path
 
-from eqgenius.application.audio_files import equalize_wav_file
-from eqgenius.domain.equalizer import EqBand, EqPreset
-from eqgenius.domain.errors import EqualizerError
-from eqgenius.dsp.biquad import FilterType
+from trxmp.application.audio_files import equalize_wav_file
+from trxmp.domain.equalizer import EqBand, EqPreset
+from trxmp.domain.errors import EqualizerError
+from trxmp.dsp.biquad import FilterType
 
 
 def _builtin_presets() -> dict[str, EqPreset]:
@@ -52,8 +52,8 @@ def _builtin_presets() -> dict[str, EqPreset]:
 def main(argv: list[str] | None = None) -> int:
     presets = _builtin_presets()
     parser = argparse.ArgumentParser(
-        prog="eqgenius-dsp",
-        description="Equalize a WAV file with the EQ Genius DSP engine.",
+        prog="trxmp-dsp",
+        description="Equalize a WAV file with the Trxmp DSP engine.",
     )
     parser.add_argument("input", type=Path, help="input WAV file")
     parser.add_argument("output", type=Path, help="output WAV file (16-bit PCM)")

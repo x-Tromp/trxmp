@@ -22,8 +22,8 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.signal import lfilter
 
-from eqgenius.dsp.biquad import BiquadCoefficients
-from eqgenius.dsp.limiter import Limiter
+from trxmp.dsp.biquad import BiquadCoefficients
+from trxmp.dsp.limiter import Limiter
 
 # Long enough to be genuinely inaudible as a transition, short enough
 # that a manual EQ tweak feels immediate rather than sluggish.

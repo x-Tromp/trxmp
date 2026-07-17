@@ -24,8 +24,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from eqgenius.domain.errors import InvalidBandError, InvalidPresetError
-from eqgenius.dsp.biquad import FilterType, design, magnitude_response_db
+from trxmp.domain.errors import InvalidBandError, InvalidPresetError
+from trxmp.dsp.biquad import FilterType, design, magnitude_response_db
 
 MAX_BOOST_DB = 9.0
 MAX_CUT_DB = -18.0

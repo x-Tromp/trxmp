@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from eqgenius.application.audio_files import equalize_wav_file
-from eqgenius.domain.equalizer import EqBand, EqPreset
-from eqgenius.dsp.biquad import FilterType
-from eqgenius.infrastructure.wav_io import load_wav, save_wav
+from trxmp.application.audio_files import equalize_wav_file
+from trxmp.domain.equalizer import EqBand, EqPreset
+from trxmp.dsp.biquad import FilterType
+from trxmp.infrastructure.wav_io import load_wav, save_wav
 
 SAMPLE_RATE = 44_100
 

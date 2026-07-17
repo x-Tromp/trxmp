@@ -3,9 +3,9 @@
 import numpy as np
 import pytest
 
-from eqgenius.domain.equalizer import EqBand, EqPreset
-from eqgenius.dsp.biquad import BiquadCoefficients, FilterType, design
-from eqgenius.dsp.engine import EqEngine
+from trxmp.domain.equalizer import EqBand, EqPreset
+from trxmp.dsp.biquad import BiquadCoefficients, FilterType, design
+from trxmp.dsp.engine import EqEngine
 
 SAMPLE_RATE = 48_000.0
 
