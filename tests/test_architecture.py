@@ -16,7 +16,7 @@ SRC = Path(__file__).parent.parent / "src" / "trxmp"
 # OS and vendor SDKs that only infrastructure may touch. If `winreg` or
 # `pycaw` ever appear in the domain, the app has stopped being portable
 # and testable in the same breath.
-_PLATFORM = ("winreg", "pycaw", "comtypes")
+_PLATFORM = ("winreg", "pycaw", "comtypes", "pyaudiowpatch", "sounddevice")
 
 FORBIDDEN: dict[str, tuple[str, ...]] = {
     "trxmp.domain": (

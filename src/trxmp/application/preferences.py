@@ -47,6 +47,7 @@ class Preferences:
     theme_mode: ThemeMode = ThemeMode.DARK
     accent: AccentColor = AccentColor.BLUE
     last_preset: str | None = None
+    show_spectrum: bool = True
 
     def with_theme_mode(self, mode: ThemeMode) -> Preferences:
         return replace(self, theme_mode=mode)
@@ -56,6 +57,9 @@ class Preferences:
 
     def with_last_preset(self, name: str | None) -> Preferences:
         return replace(self, last_preset=name)
+
+    def with_show_spectrum(self, show: bool) -> Preferences:
+        return replace(self, show_spectrum=show)
 
 
 class PreferencesStore(Protocol):

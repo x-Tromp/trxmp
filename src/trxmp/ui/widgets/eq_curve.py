@@ -41,6 +41,7 @@ from trxmp.domain.equalizer import (
     MAX_FREQUENCY_HZ,
     MIN_FREQUENCY_HZ,
 )
+from trxmp.dsp.spectrum import FLOOR_DB as SPECTRUM_FLOOR_DB
 from trxmp.ui.theme import FONT_SIZE_CAPTION, Palette
 from trxmp.ui.view_models import EqViewModel
 
@@ -80,6 +81,7 @@ class EqCurveWidget(QWidget):
         self._palette = palette
         self._dragging: int | None = None
         self._hovered: int | None = None
+        self._spectrum: np.ndarray | None = None
 
         self.setMinimumHeight(220)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -106,6 +108,17 @@ class EqCurveWidget(QWidget):
         """Custom-painted widgets can't be styled by QSS, so the theme
         reaches them through this instead."""
         self._palette = palette
+        self.update()
+
+    def set_spectrum(self, values: np.ndarray | None) -> None:
+        """Latest per-band dBFS values from the analyzer, or None to clear.
+
+        The widget needs no frequency information: the bands are
+        geometrically spaced across the same range as this axis, so on a
+        log axis their centres land at uniform pixel intervals — index
+        alone determines x.
+        """
+        self._spectrum = values
         self.update()
 
     # ── Coordinate mapping ────────────────────────────────────────────
@@ -162,8 +175,38 @@ class EqCurveWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         self._draw_grid(painter)
+        self._draw_spectrum(painter)  # behind the curve: context, not content
         self._draw_curve(painter)
         self._draw_handles(painter)
+
+    def _draw_spectrum(self, painter: QPainter) -> None:
+        """The live spectrum, as a faint filled skyline behind the curve.
+
+        Its vertical scale is its own — dBFS from the floor to 0 — not
+        the EQ's ±dB axis. Overlaying the two scales is what every
+        hardware and pro-software analyzer does: the spectrum is there
+        for *shape* (where the energy is), the curve for *numbers*.
+        """
+        if self._spectrum is None or len(self._spectrum) == 0:
+            return
+        rect = self._plot_rect()
+        span = rect.width() / len(self._spectrum)
+
+        path = QPainterPath(QPointF(rect.left(), rect.bottom()))
+        for index, value_db in enumerate(self._spectrum):
+            fraction = (float(value_db) - SPECTRUM_FLOOR_DB) / -SPECTRUM_FLOOR_DB
+            y = rect.bottom() - max(0.0, min(1.0, fraction)) * rect.height()
+            path.lineTo(QPointF(rect.left() + (index + 0.5) * span, y))
+        path.lineTo(QPointF(rect.right(), rect.bottom()))
+        path.closeSubpath()
+
+        fill = QColor(self._palette.text_tertiary)
+        fill.setAlpha(46)
+        painter.fillPath(path, QBrush(fill))
+        line = QColor(self._palette.text_tertiary)
+        line.setAlpha(90)
+        painter.setPen(QPen(line, 1.0))
+        painter.drawPath(path)
 
     def _draw_grid(self, painter: QPainter) -> None:
         rect = self._plot_rect()

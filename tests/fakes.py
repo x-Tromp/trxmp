@@ -14,6 +14,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import numpy as np
+from numpy.typing import NDArray
+
 from trxmp.application.audio_backend import BackendError, BackendState, BackendStatus
 from trxmp.application.preferences import Preferences
 from trxmp.domain.devices import AudioDevice, DeviceProfile, DeviceState
@@ -123,3 +126,34 @@ class FakeDeviceService:
     def default_output_device(self) -> AudioDevice | None:
         self.poll_count += 1
         return self.default
+
+
+class FakeCaptureSource:
+    """An AudioCaptureSource fed by the test instead of the OS.
+
+    Set ``block`` to the mono samples the next read should return, or
+    leave it None to simulate WASAPI's silence (no packets)."""
+
+    def __init__(self, sample_rate: int = 48_000, start_ok: bool = True) -> None:
+        self._sample_rate = sample_rate
+        self.start_ok = start_ok
+        self.started = False
+        self.start_count = 0
+        self.stop_count = 0
+        self.block: NDArray[np.float32] | None = None
+
+    @property
+    def sample_rate(self) -> int:
+        return self._sample_rate
+
+    def start(self) -> bool:
+        self.start_count += 1
+        self.started = self.start_ok
+        return self.start_ok
+
+    def stop(self) -> None:
+        self.stop_count += 1
+        self.started = False
+
+    def read_latest(self, num_frames: int) -> NDArray[np.float32] | None:
+        return self.block

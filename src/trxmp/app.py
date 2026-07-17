@@ -25,6 +25,7 @@ from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRe
 from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
+from trxmp.infrastructure.loopback_capture import LoopbackCapture
 from trxmp.infrastructure.paths import data_dir
 from trxmp.infrastructure.preferences_file import PREFERENCES_FILENAME, JsonPreferencesStore
 from trxmp.infrastructure.preset_repository import SqlitePresetRepository
@@ -53,6 +54,7 @@ def main() -> int:
         device_service=PycawDeviceService(),
         profile_manager=profile_manager,
         apo_support_check=is_apo_enabled_for_device,
+        capture_source=LoopbackCapture(),
     )
     window.show()
     return app.exec()

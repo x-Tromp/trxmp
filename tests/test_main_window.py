@@ -16,6 +16,7 @@ from tests.fakes import (
     ARCTIS,
     SPEAKERS,
     FakeBackend,
+    FakeCaptureSource,
     FakeDeviceService,
     FakePreferencesStore,
     InMemoryDeviceProfileRepository,
@@ -49,6 +50,7 @@ def _window(
     device_service: FakeDeviceService | None = None,
     profile_manager: ProfileManager | None = None,
     apo_support_check: object = None,
+    capture_source: FakeCaptureSource | None = None,
 ) -> MainWindow:
     library = PresetLibrary(repository)
     window = MainWindow(
@@ -58,6 +60,7 @@ def _window(
         device_service or FakeDeviceService(),
         profile_manager or ProfileManager(InMemoryDeviceProfileRepository(), library),
         apo_support_check,  # type: ignore[arg-type]
+        capture_source,
     )
     qtbot.addWidget(window)
     return window
@@ -311,3 +314,71 @@ class TestDeviceProfiles:
         window._device_controller.refresh()
         assert "No audio output" in window._device_label.text()
         assert not window._link_button.isEnabled()
+
+
+class TestSpectrum:
+    def test_no_capture_source_means_no_button(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(qtbot, repository, store)
+        assert not window._spectrum_button.isVisible()
+
+    def test_starts_on_open_when_the_preference_says_so(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        capture = FakeCaptureSource()
+        window = _window(qtbot, repository, store, capture_source=capture)
+        assert capture.started
+        assert window._spectrum_button.isChecked()
+
+    def test_stays_off_when_the_preference_says_off(
+        self, qtbot: QtBot, repository: FakeRepository
+    ) -> None:
+        store = FakePreferencesStore(Preferences(show_spectrum=False))
+        capture = FakeCaptureSource()
+        _window(qtbot, repository, store, capture_source=capture)
+        assert not capture.started
+
+    def test_toggling_the_button_stops_capture_and_persists(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        capture = FakeCaptureSource()
+        window = _window(qtbot, repository, store, capture_source=capture)
+        window._spectrum_button.setChecked(False)
+        assert not capture.started
+        assert store.preferences.show_spectrum is False
+        window._spectrum_button.setChecked(True)
+        assert capture.started
+        assert store.preferences.show_spectrum is True
+
+    def test_a_refused_capture_leaves_the_button_unchecked(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """No loopback on this machine: the analyzer quietly stays off
+        instead of erroring at someone whose EQ works fine."""
+        capture = FakeCaptureSource(start_ok=False)
+        window = _window(qtbot, repository, store, capture_source=capture)
+        assert not window._spectrum_button.isChecked()
+        assert not capture.started
+
+    def test_a_device_change_reopens_the_loopback(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """The captured loopback twin belongs to the old device; keeping
+        it open would show the spectrum of headphones no longer in use."""
+        capture = FakeCaptureSource()
+        service = FakeDeviceService(default=ARCTIS)
+        window = _window(qtbot, repository, store, device_service=service, capture_source=capture)
+        assert capture.start_count == 1
+        service.default = SPEAKERS
+        window._device_controller.refresh()
+        assert capture.stop_count == 1
+        assert capture.start_count == 2
+
+    def test_close_stops_the_capture_thread(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        capture = FakeCaptureSource()
+        window = _window(qtbot, repository, store, capture_source=capture)
+        window.close()
+        assert not capture.started

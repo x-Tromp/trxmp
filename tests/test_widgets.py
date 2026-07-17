@@ -143,6 +143,28 @@ class TestEqCurveWidget:
         curve.set_palette(Theme(ThemeMode.LIGHT, AccentColor.ORANGE).palette)
         curve.grab()
 
+    def test_spectrum_overlay_renders_and_clears(
+        self, curve: EqCurveWidget, model: EqViewModel
+    ) -> None:
+        import numpy as np
+
+        curve.set_spectrum(np.linspace(-90.0, 0.0, 96))
+        curve.grab()
+        curve.set_spectrum(None)  # the analyzer was switched off
+        curve.grab()
+
+    def test_spectrum_values_outside_range_do_not_break_painting(
+        self, curve: EqCurveWidget, model: EqViewModel
+    ) -> None:
+        """A hot master can exceed 0 dBFS momentarily (inter-sample
+        peaks); the skyline clamps instead of drawing off-canvas."""
+        import numpy as np
+
+        curve.set_spectrum(np.full(96, 12.0))
+        curve.grab()
+        curve.set_spectrum(np.full(96, -500.0))
+        curve.grab()
+
     def test_loading_a_smaller_preset_while_hovering_does_not_crash(
         self, qtbot: QtBot, curve: EqCurveWidget, model: EqViewModel
     ) -> None:

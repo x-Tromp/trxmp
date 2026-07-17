@@ -34,6 +34,7 @@ class _PreferencesDocument(BaseModel):
     theme_mode: ThemeMode = ThemeMode.DARK
     accent: AccentColor = AccentColor.BLUE
     last_preset: str | None = None
+    show_spectrum: bool = True
 
 
 class JsonPreferencesStore:
@@ -53,6 +54,7 @@ class JsonPreferencesStore:
             theme_mode=document.theme_mode,
             accent=document.accent,
             last_preset=document.last_preset,
+            show_spectrum=document.show_spectrum,
         )
 
     def save(self, preferences: Preferences) -> None:
@@ -60,6 +62,7 @@ class JsonPreferencesStore:
             theme_mode=preferences.theme_mode,
             accent=preferences.accent,
             last_preset=preferences.last_preset,
+            show_spectrum=preferences.show_spectrum,
         )
         payload = json.dumps(document.model_dump(mode="json"), indent=2) + "\n"
         write_text_atomic(self._path, payload)

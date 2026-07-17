@@ -77,7 +77,20 @@ class TestJsonPreferencesStore:
         path = tmp_path / "prefs.json"
         JsonPreferencesStore(path).save(Preferences(ThemeMode.LIGHT, AccentColor.TEAL, "X"))
         data = json.loads(path.read_text(encoding="utf-8"))
-        assert data == {"theme_mode": "light", "accent": "teal", "last_preset": "X"}
+        assert data == {
+            "theme_mode": "light",
+            "accent": "teal",
+            "last_preset": "X",
+            "show_spectrum": True,
+        }
+
+    def test_spectrum_preference_roundtrips_and_defaults_on(self, tmp_path: Path) -> None:
+        store = JsonPreferencesStore(tmp_path / "prefs.json")
+        store.save(Preferences(show_spectrum=False))
+        assert store.load().show_spectrum is False
+        # A prefs file from before M7 has no such key: defaults to on.
+        (tmp_path / "old.json").write_text('{"theme_mode": "dark"}', encoding="utf-8")
+        assert JsonPreferencesStore(tmp_path / "old.json").load().show_spectrum is True
 
     def test_overwriting_replaces_content_completely(self, tmp_path: Path) -> None:
         path = tmp_path / "prefs.json"

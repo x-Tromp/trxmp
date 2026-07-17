@@ -1,6 +1,6 @@
 [project]
 name = "trxmp"
-version = "0.5.0"
+version = "0.6.0"
 description = "System-wide parametric equalizer and headphone manager for Windows, with an Apple-inspired UI."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -8,6 +8,7 @@ authors = [{ name = "Equix", email = "equixete@gmail.com" }]
 dependencies = [
     "numpy>=2.1",
     "platformdirs>=4.2",
+    "pyaudiowpatch>=0.2.12 ; sys_platform == 'win32'",
     "pycaw>=20240210 ; sys_platform == 'win32'",
     "pydantic>=2.9",
     "pyside6>=6.9",
@@ -62,11 +63,12 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 # Qt's event handlers are camelCase by contract: `paintEvent`,
-# `mousePressEvent` etc. only work because Qt looks them up by that exact
+# `closeEvent` etc. only work because Qt looks them up by that exact
 # name. PEP 8 loses to the framework here — renaming them would silently
-# break the widget. The exception is scoped to the widgets that override
+# break the widget. The exception is scoped to the files that override
 # them rather than switched off globally.
 "src/trxmp/ui/widgets/*.py" = ["N802"]
+"src/trxmp/ui/main_window.py" = ["N802"]
 
 [tool.mypy]
 strict = true
@@ -76,7 +78,7 @@ files = ["src", "tests"]
 # and contain the untypedness at call sites with typing.cast, instead of
 # letting `Any` silently spread through the codebase.
 [[tool.mypy.overrides]]
-module = ["scipy.*", "pycaw.*", "comtypes.*"]
+module = ["scipy.*", "pycaw.*", "comtypes.*", "pyaudiowpatch.*"]
 ignore_missing_imports = true
 
 # pytest-qt's input-simulation helpers (qtbot.mousePress and friends) are

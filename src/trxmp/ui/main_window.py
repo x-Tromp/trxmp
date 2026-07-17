@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from trxmp.application.audio_backend import AudioBackend, BackendState, BackendStatus
+from trxmp.application.capture import AudioCaptureSource
 from trxmp.application.devices import AudioDeviceService, ProfileManager
 from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
 from trxmp.application.preferences import AccentColor, Preferences, PreferencesStore, ThemeMode
@@ -34,6 +35,7 @@ from trxmp.domain.devices import AudioDevice
 from trxmp.domain.errors import EqualizerError
 from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.device_controller import DeviceController
+from trxmp.ui.spectrum_controller import SpectrumController
 from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, Theme
 from trxmp.ui.view_models import EqViewModel
 from trxmp.ui.widgets.band_controls import BandControls
@@ -55,6 +57,7 @@ class MainWindow(QMainWindow):
         device_service: AudioDeviceService,
         profile_manager: ProfileManager,
         apo_support_check: ApoSupportCheck | None = None,
+        capture_source: AudioCaptureSource | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -96,6 +99,16 @@ class MainWindow(QMainWindow):
         self._device_controller.device_changed.connect(self._on_device_changed)
         self._device_controller.start()
         self._show_device(self._device_controller.current_device)
+
+        # The analyzer is optional equipment: no capture source (tests,
+        # unsupported platforms) simply means no spectrum button.
+        self._spectrum_controller: SpectrumController | None = None
+        if capture_source is not None:
+            self._spectrum_controller = SpectrumController(capture_source, parent=self)
+            self._spectrum_controller.spectrum_changed.connect(self._curve.set_spectrum)
+            self._spectrum_button.setVisible(True)
+            if self._preferences.show_spectrum:
+                self._set_spectrum_enabled(True)
 
     # ── Construction ──────────────────────────────────────────────────
     def _build_ui(self) -> None:
@@ -152,6 +165,13 @@ class MainWindow(QMainWindow):
         for accent in AccentColor:
             header.addWidget(self._build_accent_swatch(accent))
         header.addSpacing(SPACE_SM)
+
+        self._spectrum_button = QPushButton("Spectrum", self)
+        self._spectrum_button.setObjectName("ghost")
+        self._spectrum_button.setCheckable(True)
+        self._spectrum_button.setVisible(False)  # shown when a capture source exists
+        self._spectrum_button.toggled.connect(self._on_spectrum_toggled)
+        header.addWidget(self._spectrum_button)
 
         self._theme_button = QPushButton(self)
         self._theme_button.setObjectName("ghost")
@@ -303,6 +323,38 @@ class MainWindow(QMainWindow):
         self._status_label.setText(f'<span style="color:{dot}">●</span> {status.detail}')
         self._status_label.setToolTip(status.detail)
 
+    # ── Spectrum analyzer ─────────────────────────────────────────────
+    def _set_spectrum_enabled(self, enabled: bool) -> None:
+        """One path for both the button and startup restore. The guard
+        against re-entry matters: setChecked fires toggled, which lands
+        back here — the same feedback shape as the sliders' _updating."""
+        if self._spectrum_controller is None:
+            return
+        if self._spectrum_button.isChecked() != enabled:
+            self._spectrum_button.setChecked(enabled)  # re-enters; state settles below
+            return
+        if enabled:
+            if not self._spectrum_controller.start():
+                # The OS refused the loopback (no driver, exotic device).
+                # Un-check quietly; the tooltip explains on hover.
+                self._spectrum_button.setChecked(False)
+                self._spectrum_button.setToolTip("Could not open loopback capture")
+                return
+        else:
+            self._spectrum_controller.stop()
+        if self._preferences.show_spectrum != enabled:
+            self._update_preferences(self._preferences.with_show_spectrum(enabled))
+
+    def _on_spectrum_toggled(self, checked: bool) -> None:
+        self._set_spectrum_enabled(checked)
+
+    def closeEvent(self, event: object) -> None:
+        """The capture owns an OS audio stream and a callback thread;
+        Qt's parent-child teardown knows nothing about either."""
+        if self._spectrum_controller is not None:
+            self._spectrum_controller.stop()
+        super().closeEvent(event)  # type: ignore[arg-type]
+
     # ── Devices & profiles ────────────────────────────────────────────
     def _on_device_changed(self, device: AudioDevice | None) -> None:
         """The user switched headphones — follow them.
@@ -314,6 +366,9 @@ class MainWindow(QMainWindow):
         be earned by an explicit decision, or it's just surprise.
         """
         self._show_device(device)
+        if self._spectrum_controller is not None:
+            # The loopback stream we hold belongs to the *old* device.
+            self._spectrum_controller.restart_capture()
         if device is None:
             return
         preset = self._profile_manager.preset_for(device)

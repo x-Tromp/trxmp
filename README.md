@@ -76,6 +76,15 @@ for one) claim it too. Trxmp keeps its filters in its own `trxmp.txt`,
 backs up `config.txt` exactly once before claiming it, never writes
 another tool's files, and can hand everything back with `apo restore`.
 
+### Spectrum analyzer
+
+The **Spectrum** toggle overlays a live view of whatever Windows is
+playing, drawn behind the EQ curve on the same log-frequency axis. It
+reads the default output's WASAPI loopback — capture only, entirely
+separate from the EQ path, so it can never affect the sound. When
+nothing is playing, WASAPI stops delivering data and the display decays
+to silence like a meter falling.
+
 ### Devices & profiles
 
 Bind a preset to a device and Trxmp applies it automatically whenever
@@ -127,7 +136,7 @@ note saying so.
 - [x] **M4 — Equalizer APO backend**: `AudioBackend` Strategy interface, install detection, APO config rendering, live debounced apply, backup/restore of an existing controller's config
 - [x] **M5 — Devices & profiles**: Core Audio device detection (pycaw), per-device profiles with automatic preset switching, and a warning when Equalizer APO isn't hooked to the current device
 - [x] **M6 — Preset ecosystem**: AutoEQ / Equalizer APO / Peace importers, with warnings for what can't be represented and refusals for what would sound wrong. Verified against a real 40-file Peace collection (40/40)
-- [ ] **M7 — Spectrum analyzer**: read-only WASAPI loopback + real-time FFT view
+- [x] **M7 — Spectrum analyzer**: read-only WASAPI loopback (PyAudioWPatch), 96 log-spaced bands at 30 fps drawn behind the EQ curve, instant-attack/timed-release ballistics, follows device switches
 - [ ] **M8 — Lab mode**: pure-Python real-time pipeline via virtual device
 - [ ] **M9 — Music knowledge base**: structured audio/production reference database
 - [ ] **M10 — Distribution**: packaging, signing, updates, docs
