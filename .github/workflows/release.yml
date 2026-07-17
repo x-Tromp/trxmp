@@ -1,0 +1,69 @@
+name: Release
+
+# Tag-triggered, not push-to-main-triggered: a release is a deliberate
+# "this commit is what v0.7.0 means" act, not something that should
+# happen as a side effect of merging.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write # needed to create the GitHub Release and upload assets
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync
+
+      # Same gates as CI, run again here rather than trusted from a
+      # separate workflow run: a release must never ship a build that
+      # wasn't actually verified against *this* commit.
+      - name: Ruff check
+        run: uv run ruff check .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+      - name: Mypy
+        run: uv run mypy
+      - name: Pytest
+        run: uv run pytest -o addopts=""
+
+      - name: Check tag matches pyproject.toml version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          project_version="$(uv run python -c 'import trxmp; print(trxmp.__version__)')"
+          if [ "$tag_version" != "$project_version" ]; then
+            echo "::error::tag v$tag_version does not match trxmp.__version__ ($project_version) — bump the version before tagging"
+            exit 1
+          fi
+
+      - name: Build the Windows distribution (PyInstaller)
+        run: uv run pyinstaller packaging/trxmp.spec --distpath dist --workpath build --noconfirm
+
+      - name: Zip the distribution
+        shell: bash
+        run: |
+          cd dist
+          7z a -tzip "../Trxmp-${GITHUB_REF_NAME}-windows.zip" Trxmp
+
+      - name: Build the sdist/wheel (for pip install)
+        run: uv build
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "Trxmp-${GITHUB_REF_NAME}-windows.zip" \
+            dist/*.whl dist/*.tar.gz \
+            --title "Trxmp $GITHUB_REF_NAME" \
+            --generate-notes

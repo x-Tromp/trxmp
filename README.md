@@ -7,6 +7,23 @@ built in Python with an Apple-inspired UI.
 > rebuild with layered architecture, milestone-driven development, and
 > production-quality tooling from day one.
 
+## Download
+
+Grab the latest build from the [Releases page](../../releases), unzip
+it, and run `Trxmp.exe`. `trxmp-dsp.exe` sits right next to it for the
+CLI commands documented below — no separate install.
+
+**The build is unsigned.** Windows SmartScreen will flag it as from an
+"unknown publisher" on first launch — click **More info → Run anyway**.
+A real code-signing certificate is a genuine ongoing cost ($200–500+/yr)
+that only pays off once a publisher has built reputation with Microsoft;
+for a portfolio project at this stage, that expense isn't justified, so
+this is a documented, deliberate scope decision rather than an
+oversight. See the [Roadmap](#roadmap).
+
+Prefer to run from source, or curious how the build itself works? See
+[Development](#development) below.
+
 ## Audio architecture
 
 Windows only allows zero-latency system-wide audio processing inside its
@@ -58,6 +75,23 @@ uv run mypy                  # strict type checking
 ```
 
 All four quality gates must pass before every commit.
+
+### Building the distributable
+
+```powershell
+uv run pyinstaller packaging/trxmp.spec --distpath dist --workpath build --noconfirm
+```
+
+Produces `dist/Trxmp/` — a onedir bundle (`Trxmp.exe` + `trxmp-dsp.exe`
+plus their shared `_internal/` dependencies). Onedir over onefile is a
+deliberate choice: PySide6's Qt plugins are a few hundred small data
+files, and onefile mode would re-extract all of them to a temp
+directory on *every* launch rather than once at install time.
+
+Pushing a tag matching `v*.*.*` runs [`.github/workflows/release.yml`](.github/workflows/release.yml):
+the same four quality gates, then this exact build, zipped and attached
+to a GitHub Release — so what ships is always what the gates verified,
+never a build assembled by hand.
 
 ### System-wide EQ
 
@@ -199,4 +233,4 @@ fabricating breadth nobody asked Trxmp to vouch for.
 - [x] **M7 — Spectrum analyzer**: read-only WASAPI loopback (PyAudioWPatch), 96 log-spaced bands at 30 fps drawn behind the EQ curve, instant-attack/timed-release ballistics, follows device switches
 - [x] **M8 — Lab mode**: pure-Python real-time pipeline via a virtual audio cable (PyAudioWPatch/WASAPI), single dedicated capture-process-render thread, automatic non-cable render device selection to avoid feedback loops, `trxmp-dsp lab` subcommands. Verified against a real VB-CABLE install and real headphones — see the Lab mode section above
 - [x] **M9 — Music knowledge base**: bundled YAML-backed catalog (frequency-band vocabulary + a 5-headphone correction table ported from the original prototype), `ReferenceCatalog` Protocol, headphone picker in the UI, `trxmp-dsp reference` subcommands. Deliberately scoped narrower than the original wishlist — see the Knowledge base section above
-- [ ] **M10 — Distribution**: packaging, signing, updates, docs
+- [x] **M10 — Distribution**: PyInstaller onedir build (`Trxmp.exe` + `trxmp-dsp.exe`, verified to actually launch and run — not just "it compiled"), `.github/workflows/release.yml` builds + quality-gates + publishes a GitHub Release on every `v*.*.*` tag, MIT license. Deliberately scoped narrower than the original wishlist too: **no code signing** (a real certificate is an ongoing cost that isn't justified yet — documented in [Download](#download), not silently skipped) and **no auto-update** (a "check for a newer release" nudge, not a self-installing updater, would be the natural next step if this ever needs it)
