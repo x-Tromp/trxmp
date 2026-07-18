@@ -26,6 +26,7 @@ from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRe
 from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
+from trxmp.infrastructure.github_releases import GitHubReleaseSource
 from trxmp.infrastructure.lab_mode.backend import create_lab_mode_backend
 from trxmp.infrastructure.lab_mode.cable_detection import select_render_device
 from trxmp.infrastructure.loopback_capture import LoopbackCapture
@@ -38,6 +39,10 @@ from trxmp.ui.main_window import MainWindow
 
 BACKEND_APO = "Equalizer APO"
 BACKEND_LAB_MODE = "Lab Mode"
+
+GITHUB_OWNER = "Equix"
+GITHUB_REPO = "trxmp"
+RELEASES_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
 
 
 def main() -> int:
@@ -71,6 +76,8 @@ def main() -> int:
         apo_support_check=is_apo_enabled_for_device,
         capture_source=LoopbackCapture(),
         reference_catalog=YamlReferenceCatalog(),
+        update_source=GitHubReleaseSource(GITHUB_OWNER, GITHUB_REPO),
+        releases_url=RELEASES_URL,
     )
     window.show()
     return app.exec()

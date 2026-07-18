@@ -21,18 +21,23 @@ from tests.fakes import (
     FakeDeviceService,
     FakePreferencesStore,
     FakeReferenceCatalog,
+    FakeReleaseSource,
     InMemoryDeviceProfileRepository,
     InMemoryPresetRepository,
 )
+from trxmp import __version__
 from trxmp.application.audio_backend import AudioBackend
 from trxmp.application.backend_switcher import BackendSwitcher
 from trxmp.application.devices import ProfileManager
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.application.reference import ReferenceCatalog
+from trxmp.application.update_check import ReleaseSource
 from trxmp.domain.equalizer import EqBand, EqPreset
 from trxmp.dsp.biquad import FilterType
 from trxmp.ui.main_window import MainWindow
+
+RELEASES_URL = "https://github.com/Equix/trxmp/releases"
 
 FakeRepository = InMemoryPresetRepository
 
@@ -57,6 +62,8 @@ def _window(
     apo_support_check: object = None,
     capture_source: FakeCaptureSource | None = None,
     reference_catalog: ReferenceCatalog | None = None,
+    update_source: ReleaseSource | None = None,
+    releases_url: str | None = None,
 ) -> MainWindow:
     library = PresetLibrary(repository)
     window = MainWindow(
@@ -68,6 +75,8 @@ def _window(
         apo_support_check,  # type: ignore[arg-type]
         capture_source,
         reference_catalog,
+        update_source,
+        releases_url,
     )
     qtbot.addWidget(window)
     return window
@@ -536,3 +545,66 @@ class TestBackendSwitching:
         window = _window(qtbot, repository, store, backend=switcher)
         assert switcher.current_name == "APO"
         assert window._backend_box.currentText() == "APO"
+
+
+class TestUpdateNotice:
+    def test_no_source_means_no_button(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(qtbot, repository, store)
+        window.show()
+        assert not window._update_button.isVisible()
+
+    def test_a_newer_release_shows_the_button(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(
+            qtbot,
+            repository,
+            store,
+            update_source=FakeReleaseSource("v9.9.9"),
+            releases_url=RELEASES_URL,
+        )
+        window.show()
+        qtbot.waitUntil(lambda: window._update_button.isVisible(), timeout=1_000)
+        assert "9.9.9" in window._update_button.text()
+
+    def test_already_current_shows_no_button(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        window = _window(
+            qtbot,
+            repository,
+            store,
+            update_source=FakeReleaseSource(f"v{__version__}"),
+            releases_url=RELEASES_URL,
+        )
+        window.show()
+        qtbot.wait(200)  # let the background check finish; nothing to wait *for*
+        assert not window._update_button.isVisible()
+
+    def test_clicking_opens_the_releases_url(
+        self,
+        qtbot: QtBot,
+        repository: FakeRepository,
+        store: FakePreferencesStore,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        opened: list[str] = []
+        monkeypatch.setattr(
+            "trxmp.ui.main_window.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()),
+        )
+        window = _window(
+            qtbot,
+            repository,
+            store,
+            update_source=FakeReleaseSource("v9.9.9"),
+            releases_url=RELEASES_URL,
+        )
+        window.show()
+        qtbot.waitUntil(lambda: window._update_button.isVisible(), timeout=1_000)
+
+        window._update_button.click()
+
+        assert opened == [RELEASES_URL]

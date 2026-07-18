@@ -172,6 +172,16 @@ TEST_HEADPHONE = HeadphoneModel(
 )
 
 
+class FakeReleaseSource:
+    """A ReleaseSource fed by the test instead of GitHub's API."""
+
+    def __init__(self, tag: str | None) -> None:
+        self.tag = tag
+
+    def latest_tag(self) -> str | None:
+        return self.tag
+
+
 class FakeReferenceCatalog:
     def __init__(self, headphones: tuple[HeadphoneModel, ...] = (TEST_HEADPHONE,)) -> None:
         self._headphones = headphones

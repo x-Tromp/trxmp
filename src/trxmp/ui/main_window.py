@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from trxmp import __version__
 from trxmp.application.audio_backend import AudioBackend, BackendState, BackendStatus
 from trxmp.application.backend_switcher import BackendSwitcher
 from trxmp.application.capture import AudioCaptureSource
@@ -35,6 +36,7 @@ from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
 from trxmp.application.preferences import AccentColor, Preferences, PreferencesStore, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.application.reference import ReferenceCatalog
+from trxmp.application.update_check import ReleaseSource, UpdateNotice
 from trxmp.domain.devices import AudioDevice
 from trxmp.domain.equalizer import EqPreset
 from trxmp.domain.errors import EqualizerError
@@ -42,6 +44,7 @@ from trxmp.ui.backend_controller import BackendController
 from trxmp.ui.device_controller import DeviceController
 from trxmp.ui.spectrum_controller import SpectrumController
 from trxmp.ui.theme import SPACE_LG, SPACE_MD, SPACE_SM, SPACE_XL, SPACE_XS, Theme
+from trxmp.ui.update_controller import UpdateController
 from trxmp.ui.view_models import EqViewModel
 from trxmp.ui.widgets.band_controls import BandControls
 from trxmp.ui.widgets.eliding_label import ElidingLabel
@@ -66,6 +69,8 @@ class MainWindow(QMainWindow):
         apo_support_check: ApoSupportCheck | None = None,
         capture_source: AudioCaptureSource | None = None,
         reference_catalog: ReferenceCatalog | None = None,
+        update_source: ReleaseSource | None = None,
+        releases_url: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -138,6 +143,16 @@ class MainWindow(QMainWindow):
             self._spectrum_button.setVisible(True)
             if self._preferences.show_spectrum:
                 self._set_spectrum_enabled(True)
+
+        # Same optionality once more: no source (tests, no network-check
+        # wired up yet) means the button simply never appears.
+        self._update_notice: UpdateNotice | None = None
+        if update_source is not None and releases_url is not None:
+            update_controller = UpdateController(
+                __version__, update_source, releases_url, parent=self
+            )
+            update_controller.update_available.connect(self._on_update_available)
+            update_controller.start()
 
     # ── Construction ──────────────────────────────────────────────────
     def _build_ui(self) -> None:
@@ -285,6 +300,15 @@ class MainWindow(QMainWindow):
         self._backend_box.setVisible(False)
         self._backend_box.activated.connect(self._on_backend_selected)
         row.addWidget(self._backend_box)
+
+        # Invisible until (if ever) the background check actually finds
+        # something — most launches, most of the time, this never
+        # appears at all.
+        self._update_button = QPushButton(self)
+        self._update_button.setObjectName("ghost")
+        self._update_button.setVisible(False)
+        self._update_button.clicked.connect(self._on_update_clicked)
+        row.addWidget(self._update_button)
 
         self._theme_button = QPushButton(self)
         self._theme_button.setObjectName("ghost")
@@ -502,6 +526,17 @@ class MainWindow(QMainWindow):
         self._backend_switcher.select(name)
         self._backend_controller.resync()
         self._update_preferences(self._preferences.with_backend_name(name))
+
+    # ── Update check ──────────────────────────────────────────────────
+    def _on_update_available(self, notice: UpdateNotice) -> None:
+        self._update_notice = notice
+        self._update_button.setText(f"Update to {notice.version}")
+        self._update_button.setToolTip(notice.url)
+        self._update_button.setVisible(True)
+
+    def _on_update_clicked(self) -> None:
+        if self._update_notice is not None:
+            QDesktopServices.openUrl(QUrl(self._update_notice.url))
 
     # ── Backend status ────────────────────────────────────────────────
     def _show_backend_status(self, status: BackendStatus) -> None:
