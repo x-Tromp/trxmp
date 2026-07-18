@@ -59,6 +59,7 @@ jobs:
         run: uv build
 
       - name: Create GitHub Release
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
