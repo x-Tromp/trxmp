@@ -15,6 +15,7 @@ class TestPreferencesValue:
         assert preferences.theme_mode is ThemeMode.DARK
         assert preferences.accent is AccentColor.BLUE
         assert preferences.last_preset is None
+        assert preferences.backend_name is None
 
     def test_with_methods_return_new_objects_and_leave_the_original_alone(self) -> None:
         original = Preferences()
@@ -22,6 +23,12 @@ class TestPreferencesValue:
         assert changed.accent is AccentColor.PINK
         assert original.accent is AccentColor.BLUE  # immutability, proven
         assert changed.theme_mode is original.theme_mode  # everything else carried over
+
+    def test_with_backend_name_returns_a_new_object(self) -> None:
+        original = Preferences()
+        changed = original.with_backend_name("Lab Mode")
+        assert changed.backend_name == "Lab Mode"
+        assert original.backend_name is None
 
 
 class TestJsonPreferencesStore:
@@ -82,6 +89,7 @@ class TestJsonPreferencesStore:
             "accent": "teal",
             "last_preset": "X",
             "show_spectrum": True,
+            "backend_name": None,
         }
 
     def test_spectrum_preference_roundtrips_and_defaults_on(self, tmp_path: Path) -> None:
@@ -91,6 +99,15 @@ class TestJsonPreferencesStore:
         # A prefs file from before M7 has no such key: defaults to on.
         (tmp_path / "old.json").write_text('{"theme_mode": "dark"}', encoding="utf-8")
         assert JsonPreferencesStore(tmp_path / "old.json").load().show_spectrum is True
+
+    def test_backend_name_roundtrips_and_defaults_to_none(self, tmp_path: Path) -> None:
+        store = JsonPreferencesStore(tmp_path / "prefs.json")
+        store.save(Preferences(backend_name="Lab Mode"))
+        assert store.load().backend_name == "Lab Mode"
+        # A prefs file from before M11 has no such key: no opinion, let
+        # the composition root pick its own default.
+        (tmp_path / "old.json").write_text('{"theme_mode": "dark"}', encoding="utf-8")
+        assert JsonPreferencesStore(tmp_path / "old.json").load().backend_name is None
 
     def test_overwriting_replaces_content_completely(self, tmp_path: Path) -> None:
         path = tmp_path / "prefs.json"

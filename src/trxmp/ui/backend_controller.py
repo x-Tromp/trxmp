@@ -78,6 +78,16 @@ class BackendController(QObject):
             self._timer.stop()
             self._apply_now()
 
+    def resync(self) -> None:
+        """Push the model's current state to the backend right now,
+        unconditionally — unlike :meth:`flush`, whether or not anything
+        was mid-debounce. For when the *destination* changed rather than
+        the model: switching from Equalizer APO to Lab mode must show
+        the newly active backend the same curve that was already on
+        screen, even if the user hadn't touched a slider in a while."""
+        self._timer.stop()
+        self._apply_now()
+
     def _apply_now(self) -> None:
         if not self._backend.status.is_usable:
             self.status_changed.emit(self._backend.status)

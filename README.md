@@ -151,6 +151,12 @@ placed on it measured a 27.4 dB drop at the physical output versus a
 flat bypass run — the entire chain, proven with the same FFT-based
 technique M7's spectrum analyzer verification used, not just "it builds."
 
+The **Audio backend** picker in the header switches between Equalizer
+APO and Lab mode live, without restarting the app: whatever's already
+on the curve reaches the newly chosen backend immediately, and the
+outgoing one is disabled first — never two backends touching the audio
+at once. The choice is remembered across launches.
+
 ### Devices & profiles
 
 Bind a preset to a device and Trxmp applies it automatically whenever
@@ -234,3 +240,4 @@ fabricating breadth nobody asked Trxmp to vouch for.
 - [x] **M8 — Lab mode**: pure-Python real-time pipeline via a virtual audio cable (PyAudioWPatch/WASAPI), single dedicated capture-process-render thread, automatic non-cable render device selection to avoid feedback loops, `trxmp-dsp lab` subcommands. Verified against a real VB-CABLE install and real headphones — see the Lab mode section above
 - [x] **M9 — Music knowledge base**: bundled YAML-backed catalog (frequency-band vocabulary + a 5-headphone correction table ported from the original prototype), `ReferenceCatalog` Protocol, headphone picker in the UI, `trxmp-dsp reference` subcommands. Deliberately scoped narrower than the original wishlist — see the Knowledge base section above
 - [x] **M10 — Distribution**: PyInstaller onedir build (`Trxmp.exe` + `trxmp-dsp.exe`, verified to actually launch and run — not just "it compiled"), `.github/workflows/release.yml` builds + quality-gates + publishes a GitHub Release on every `v*.*.*` tag, MIT license. Deliberately scoped narrower than the original wishlist too: **no code signing** (a real certificate is an ongoing cost that isn't justified yet — documented in [Download](#download), not silently skipped) and **no auto-update** (a "check for a newer release" nudge, not a self-installing updater, would be the natural next step if this ever needs it)
+- [x] **M11 — Lab mode in the GUI**: `BackendSwitcher` presents Equalizer APO and Lab mode as one `AudioBackend` to the rest of the app, with a `select()` that disables the outgoing backend before switching — never two Strategies touching the audio at once. The header's new **Audio backend** picker switches live and remembers the choice; `BackendController.resync()` pushes the on-screen curve to the newly active backend immediately rather than waiting for the next edit

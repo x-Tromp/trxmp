@@ -48,6 +48,11 @@ class Preferences:
     accent: AccentColor = AccentColor.BLUE
     last_preset: str | None = None
     show_spectrum: bool = True
+    # None, not a hardcoded default name: a preferences file is written
+    # by the application layer, which must not know EqualizerApoBackend
+    # is even called "Equalizer APO" — that string lives in infrastructure.
+    # None means "whatever the composition root picks as its default."
+    backend_name: str | None = None
 
     def with_theme_mode(self, mode: ThemeMode) -> Preferences:
         return replace(self, theme_mode=mode)
@@ -60,6 +65,9 @@ class Preferences:
 
     def with_show_spectrum(self, show: bool) -> Preferences:
         return replace(self, show_spectrum=show)
+
+    def with_backend_name(self, name: str) -> Preferences:
+        return replace(self, backend_name=name)
 
 
 class PreferencesStore(Protocol):

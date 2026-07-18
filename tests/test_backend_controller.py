@@ -100,3 +100,31 @@ def test_flush_applies_immediately(model: EqViewModel, backend: FakeBackend) -> 
     model.set_band_gain(0, 2.0)
     controller.flush()
     assert len(backend.applied) == 1
+
+
+def test_flush_with_nothing_pending_does_nothing(model: EqViewModel, backend: FakeBackend) -> None:
+    controller = BackendController(model, backend, debounce_ms=10)
+    controller.start()
+    controller.flush()  # no edit happened; nothing is mid-debounce
+    assert backend.applied == []
+
+
+def test_resync_applies_even_with_nothing_pending(model: EqViewModel, backend: FakeBackend) -> None:
+    """The scenario flush() can't cover: the model hasn't changed, but
+    the backend underneath it just did (switching Strategy), so the
+    already-on-screen curve has to reach it regardless."""
+    controller = BackendController(model, backend, debounce_ms=10_000)
+    controller.start()
+    controller.resync()
+    assert len(backend.applied) == 1
+
+
+def test_resync_cancels_a_pending_debounce_instead_of_double_applying(
+    model: EqViewModel, backend: FakeBackend
+) -> None:
+    controller = BackendController(model, backend, debounce_ms=10_000)
+    controller.start()
+    model.set_band_gain(0, 2.0)  # schedules a debounced apply
+    controller.resync()
+    assert len(backend.applied) == 1
+    assert not controller._timer.isActive()

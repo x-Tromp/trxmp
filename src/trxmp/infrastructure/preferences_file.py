@@ -35,6 +35,7 @@ class _PreferencesDocument(BaseModel):
     accent: AccentColor = AccentColor.BLUE
     last_preset: str | None = None
     show_spectrum: bool = True
+    backend_name: str | None = None
 
 
 class JsonPreferencesStore:
@@ -55,6 +56,7 @@ class JsonPreferencesStore:
             accent=document.accent,
             last_preset=document.last_preset,
             show_spectrum=document.show_spectrum,
+            backend_name=document.backend_name,
         )
 
     def save(self, preferences: Preferences) -> None:
@@ -63,6 +65,7 @@ class JsonPreferencesStore:
             accent=preferences.accent,
             last_preset=preferences.last_preset,
             show_spectrum=preferences.show_spectrum,
+            backend_name=preferences.backend_name,
         )
         payload = json.dumps(document.model_dump(mode="json"), indent=2) + "\n"
         write_text_atomic(self._path, payload)

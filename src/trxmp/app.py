@@ -18,6 +18,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from trxmp import __version__
+from trxmp.application.backend_switcher import BackendSwitcher
 from trxmp.application.devices import ProfileManager
 from trxmp.application.preset_library import PresetLibrary
 from trxmp.infrastructure.database import create_default_engine
@@ -25,6 +26,8 @@ from trxmp.infrastructure.device_profile_repository import SqliteDeviceProfileRe
 from trxmp.infrastructure.equalizer_apo.backend import EqualizerApoBackend
 from trxmp.infrastructure.equalizer_apo.detection import detect_installation
 from trxmp.infrastructure.equalizer_apo.device_support import is_apo_enabled_for_device
+from trxmp.infrastructure.lab_mode.backend import create_lab_mode_backend
+from trxmp.infrastructure.lab_mode.cable_detection import select_render_device
 from trxmp.infrastructure.loopback_capture import LoopbackCapture
 from trxmp.infrastructure.paths import data_dir
 from trxmp.infrastructure.preferences_file import PREFERENCES_FILENAME, JsonPreferencesStore
@@ -32,6 +35,9 @@ from trxmp.infrastructure.preset_repository import SqlitePresetRepository
 from trxmp.infrastructure.reference_data.catalog import YamlReferenceCatalog
 from trxmp.infrastructure.windows_audio import PycawDeviceService
 from trxmp.ui.main_window import MainWindow
+
+BACKEND_APO = "Equalizer APO"
+BACKEND_LAB_MODE = "Lab Mode"
 
 
 def main() -> int:
@@ -45,7 +51,15 @@ def main() -> int:
     preferences_store = JsonPreferencesStore(data_dir() / PREFERENCES_FILENAME)
     # Detection happens here, not inside the backend: the backend takes an
     # installation (or None) so it stays testable against a temp folder.
-    backend = EqualizerApoBackend(detect_installation())
+    apo_backend = EqualizerApoBackend(detect_installation())
+    # Same shape for Lab mode: create_lab_mode_backend detects the cable
+    # once, here, rather than the backend doing it itself. Constructing
+    # this never fails even with no cable and no render device — its
+    # status just honestly reports UNAVAILABLE until both exist.
+    lab_backend = create_lab_mode_backend(select_render_device())
+    backend = BackendSwitcher(
+        {BACKEND_APO: apo_backend, BACKEND_LAB_MODE: lab_backend}, initial=BACKEND_APO
+    )
     profile_manager = ProfileManager(SqliteDeviceProfileRepository(engine), library)
 
     window = MainWindow(

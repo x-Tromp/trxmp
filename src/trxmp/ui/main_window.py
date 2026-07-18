@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from trxmp.application.audio_backend import AudioBackend, BackendState, BackendStatus
+from trxmp.application.backend_switcher import BackendSwitcher
 from trxmp.application.capture import AudioCaptureSource
 from trxmp.application.devices import AudioDeviceService, ProfileManager
 from trxmp.application.eq_analysis import DEFAULT_SAMPLE_RATE_HZ
@@ -82,6 +83,17 @@ class MainWindow(QMainWindow):
         # Kept so a theme change can re-render the status line in the new
         # palette without asking the backend again (which touches disk).
         self._backend_status = BackendStatus(BackendState.READY, "")
+        # A plain AudioBackend (tests, or a future single-backend build)
+        # has no notion of "which one" — the picker only appears when
+        # there's actually something to pick between. Detected by type
+        # rather than a separate constructor flag: a switcher already
+        # satisfies AudioBackend structurally, so the same `backend`
+        # argument serves both cases.
+        self._backend_switcher = backend if isinstance(backend, BackendSwitcher) else None
+        if self._backend_switcher is not None:
+            wanted = self._preferences.backend_name
+            if wanted is not None and wanted in self._backend_switcher.available_names:
+                self._backend_switcher.select(wanted)
         # Populated by _wrap_in_card; refreshed on every theme change
         # since light and dark need very different shadow strengths.
         self._card_shadows: list[QGraphicsDropShadowEffect] = []
@@ -96,6 +108,8 @@ class MainWindow(QMainWindow):
         self._restore_last_preset()
         if self._reference_catalog is not None:
             self._reload_headphone_list()
+        if self._backend_switcher is not None:
+            self._reload_backend_list()
 
         self._model.bands_changed.connect(self._update_metrics)
         self._model.preamp_changed.connect(self._update_metrics)
@@ -262,6 +276,15 @@ class MainWindow(QMainWindow):
         self._spectrum_button.setVisible(False)  # shown when a capture source exists
         self._spectrum_button.toggled.connect(self._on_spectrum_toggled)
         row.addWidget(self._spectrum_button)
+
+        # Same optionality pattern as the spectrum button and headphone
+        # picker: only shown when the composition root actually handed
+        # us something to switch between.
+        self._backend_box = QComboBox(self)
+        self._backend_box.setAccessibleName("Audio backend")
+        self._backend_box.setVisible(False)
+        self._backend_box.activated.connect(self._on_backend_selected)
+        row.addWidget(self._backend_box)
 
         self._theme_button = QPushButton(self)
         self._theme_button.setObjectName("ghost")
@@ -450,6 +473,35 @@ class MainWindow(QMainWindow):
         if headphone is None:
             return
         self._model.load(EqPreset(bands=headphone.correction))
+
+    # ── Audio backend ─────────────────────────────────────────────────
+    def _reload_backend_list(self) -> None:
+        assert self._backend_switcher is not None
+        self._backend_box.clear()
+        for name in self._backend_switcher.available_names:
+            self._backend_box.addItem(name, userData=name)
+        index = self._backend_box.findData(self._backend_switcher.current_name)
+        if index >= 0:
+            self._backend_box.setCurrentIndex(index)
+        self._backend_box.setVisible(True)
+
+    def _on_backend_selected(self, index: int) -> None:
+        """Switch which Strategy is live.
+
+        ``resync`` rather than waiting for the next edit: whatever curve
+        is already on screen must reach the newly active backend right
+        away, even if the user hasn't touched a slider since opening the
+        app — otherwise picking Lab mode would silently do nothing until
+        the next drag.
+        """
+        if self._backend_switcher is None:
+            return
+        name = self._backend_box.itemData(index)
+        if name == self._backend_switcher.current_name:
+            return
+        self._backend_switcher.select(name)
+        self._backend_controller.resync()
+        self._update_preferences(self._preferences.with_backend_name(name))
 
     # ── Backend status ────────────────────────────────────────────────
     def _show_backend_status(self, status: BackendStatus) -> None:

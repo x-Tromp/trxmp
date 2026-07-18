@@ -24,6 +24,8 @@ from tests.fakes import (
     InMemoryDeviceProfileRepository,
     InMemoryPresetRepository,
 )
+from trxmp.application.audio_backend import AudioBackend
+from trxmp.application.backend_switcher import BackendSwitcher
 from trxmp.application.devices import ProfileManager
 from trxmp.application.preferences import AccentColor, Preferences, ThemeMode
 from trxmp.application.preset_library import PresetLibrary
@@ -49,7 +51,7 @@ def _window(
     qtbot: QtBot,
     repository: InMemoryPresetRepository,
     store: FakePreferencesStore,
-    backend: FakeBackend | None = None,
+    backend: AudioBackend | None = None,
     device_service: FakeDeviceService | None = None,
     profile_manager: ProfileManager | None = None,
     apo_support_check: object = None,
@@ -449,3 +451,88 @@ class TestHeadphoneCatalog:
             window._headphone_box.setCurrentIndex(0)
             window._on_headphone_selected(0)
         assert len(window._model.bands) == len(TEST_HEADPHONE.correction)
+
+
+class TestBackendSwitching:
+    def test_a_plain_backend_shows_no_picker(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        """Same optionality as the spectrum button and headphone picker:
+        no switcher, no combo — matters for tests and any future
+        single-backend build."""
+        window = _window(qtbot, repository, store, backend=FakeBackend())
+        window.show()
+        assert not window._backend_box.isVisible()
+
+    def test_a_switcher_populates_and_reveals_the_picker(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        switcher = BackendSwitcher({"APO": FakeBackend(), "Lab": FakeBackend()}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+        window.show()
+        assert window._backend_box.isVisible()
+        assert [window._backend_box.itemText(i) for i in range(window._backend_box.count())] == [
+            "APO",
+            "Lab",
+        ]
+        assert window._backend_box.currentText() == "APO"
+
+    def test_selecting_a_backend_switches_disables_the_old_one_and_resyncs_the_new_one(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        apo, lab = FakeBackend(), FakeBackend()
+        switcher = BackendSwitcher({"APO": apo, "Lab": lab}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+
+        index = window._backend_box.findData("Lab")
+        window._backend_box.setCurrentIndex(index)
+        window._on_backend_selected(index)
+
+        assert switcher.current_name == "Lab"
+        assert apo.disable_count == 1
+        # resync() must reach the *newly* active backend immediately —
+        # not wait for the next slider edit.
+        assert len(lab.applied) == 1
+
+    def test_selecting_the_same_backend_again_is_a_no_op(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        apo = FakeBackend()
+        switcher = BackendSwitcher({"APO": apo, "Lab": FakeBackend()}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+
+        index = window._backend_box.findData("APO")
+        window._on_backend_selected(index)
+
+        assert apo.disable_count == 0
+        assert apo.applied == []
+
+    def test_the_choice_is_persisted(
+        self, qtbot: QtBot, repository: FakeRepository, store: FakePreferencesStore
+    ) -> None:
+        switcher = BackendSwitcher({"APO": FakeBackend(), "Lab": FakeBackend()}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+        index = window._backend_box.findData("Lab")
+        window._on_backend_selected(index)
+        assert store.preferences.backend_name == "Lab"
+
+    def test_a_remembered_choice_is_restored_on_open(
+        self, qtbot: QtBot, repository: FakeRepository
+    ) -> None:
+        store = FakePreferencesStore(Preferences(backend_name="Lab"))
+        switcher = BackendSwitcher({"APO": FakeBackend(), "Lab": FakeBackend()}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+        assert switcher.current_name == "Lab"
+        assert window._backend_box.currentText() == "Lab"
+
+    def test_an_unrecognised_remembered_choice_falls_back_to_the_initial_backend(
+        self, qtbot: QtBot, repository: FakeRepository
+    ) -> None:
+        """The saved name came from a build with a backend that no
+        longer exists (or a hand-edited file) — fall back quietly rather
+        than crash on startup."""
+        store = FakePreferencesStore(Preferences(backend_name="Ghost"))
+        switcher = BackendSwitcher({"APO": FakeBackend(), "Lab": FakeBackend()}, initial="APO")
+        window = _window(qtbot, repository, store, backend=switcher)
+        assert switcher.current_name == "APO"
+        assert window._backend_box.currentText() == "APO"
