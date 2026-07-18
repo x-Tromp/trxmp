@@ -40,7 +40,7 @@ from trxmp.ui.main_window import MainWindow
 BACKEND_APO = "Equalizer APO"
 BACKEND_LAB_MODE = "Lab Mode"
 
-GITHUB_OWNER = "Equix"
+GITHUB_OWNER = "x-Tromp"
 GITHUB_REPO = "trxmp"
 RELEASES_URL = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}/releases"
 
